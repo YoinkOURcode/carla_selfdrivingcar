@@ -174,6 +174,20 @@ main() {
     # Ensure python is available:
     if [ -z "${PM_PYTHON_EXT:-}" ]; then
         install_python || return 1
+        # The bundled Python requires libcrypt.so.1, which newer Linux
+        # distributions may no longer provide. Packman supports an external
+        # interpreter; use the matching system version when the bundle fails.
+        if ! "$PM_PYTHON" -S -s -u -E -c 'import ssl, ctypes, zlib' >/dev/null 2>&1; then
+            local SYSTEM_PYTHON
+            SYSTEM_PYTHON=$(command -v python3.10) || {
+                echo "Packman Python cannot start. Install libcrypt.so.1 or set PM_PYTHON_EXT to a compatible Python 3.10 interpreter." >&2
+                return 1
+            }
+            "$SYSTEM_PYTHON" -S -s -u -E -c 'import ssl, ctypes, zlib' || return 1
+            export PM_PYTHON_EXT="$SYSTEM_PYTHON"
+            PM_PYTHON="$SYSTEM_PYTHON"
+            echo "Bundled Packman Python unavailable; using $PM_PYTHON"
+        fi
     else
         PM_PYTHON="$PM_PYTHON_EXT"
     fi

@@ -129,6 +129,13 @@ if ! { ${REMOVE_INTERMEDIATE} || ${BUILD_CARLAUE4} || ${LAUNCH_UE4_EDITOR}; }; t
   fatal_error "Nothing selected to be done."
 fi
 
+if ${LAUNCH_UE4_EDITOR} ; then
+  ROAD_PAINTER_ASSET="${CARLAUE4_ROOT_FOLDER}/Content/Carla/Blueprints/LevelDesign/RoadPainterPreset.uasset"
+  if [ ! -s "${ROAD_PAINTER_ASSET}" ] || head -c 128 "${ROAD_PAINTER_ASSET}" | grep -q '^version https://git-lfs.github.com/spec/v1'; then
+    fatal_error "CARLA content assets are missing or not downloaded. Run ./Update.sh from the project root before make launch."
+  fi
+fi
+
 pushd "${CARLAUE4_ROOT_FOLDER}" >/dev/null
 
 # ==============================================================================
@@ -174,11 +181,17 @@ fi
 if ${BUILD_CARLAUE4} ; then
 
   OPTIONAL_MODULES_TEXT=""
+  UE4_BUILD_ARGS=""
 
   if ${USE_SIMREADY} ; then
     OPTIONAL_MODULES_TEXT="SimReady ON"$'\n'"${OPTIONAL_MODULES_TEXT}"
     # fetch SimReady plugin dependencies
     pushd "${CARLAUE4_ADDPLUGINS_FOLDER}/Converters" >/dev/null
+    if [ ! -f MDL/Source/ThirdParty/mdl_sdk/include/mi/mdl_sdk.h ]; then
+      # A previous failed download may have left cached build actions without
+      # the SDK include paths. Regenerate them after installing the SDK.
+      UE4_BUILD_ARGS="-gather"
+    fi
     ./get_dependencies.sh
     popd >/dev/null
   else
@@ -228,7 +241,7 @@ if ${BUILD_CARLAUE4} ; then
   fi
 
   log "Build CarlaUE4 project."
-  make CarlaUE4Editor ARGS=""
+  make CarlaUE4Editor ARGS="${UE4_BUILD_ARGS}"
 
   #Providing the user with the ExportedMaps folder
   EXPORTED_MAPS="${CARLAUE4_ROOT_FOLDER}/Content/Carla/ExportedMaps"

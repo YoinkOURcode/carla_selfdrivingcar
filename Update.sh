@@ -88,7 +88,9 @@ if [[ -f "$CONTENT_FOLDER/.version" ]]; then
     download_content
   fi
 elif [[ -d "$CONTENT_FOLDER/.git" ]]; then
-  echo "Using git version of 'Content', skipping update."
+  echo "Using git version of 'Content', completing any pending LFS downloads."
+  git -C "$CONTENT_FOLDER" lfs pull
+  echo "Content downloads completed successfully."
 else
   download_content
 fi

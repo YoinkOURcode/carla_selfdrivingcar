@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -e
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
 # Remove the ThirdParty folder where all of the links are created
 echo Removing existing SimReady Plugin ThirdParty dependencies
 rm -rf "SimReady/ThirdParty"
