@@ -1,0 +1,14 @@
+{
+  "checked_utc": "2026-10-17T14:58:34.469478+00:00",
+  "host": "127.0.0.1",
+  "port": 2000,
+  "client_version": "e6c5fb9ce-dirty",
+  "server_version": "e6c5fb9ce-dirty",
+  "map": "Carla/Maps/Town01",
+  "synchronous_mode": false,
+  "fixed_delta_seconds": null,
+  "no_rendering_mode": false,
+  "vehicles": [],
+  "snapshot_frame": 9976,
+  "queries": "read-only; no tick, spawn or settings change"
+}

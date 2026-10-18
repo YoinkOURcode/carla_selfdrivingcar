@@ -40,6 +40,7 @@ build/
 .debug
 .gdb_history
 .gtest
+data/dataset
 .idea
 .tags*
 .vs
@@ -55,6 +56,13 @@ core
 profiler.csv
 .env
 .venv
+*.log
+*.zip
 Unreal/CarlaUE4/.ignore
 devcontainer.json
 compile_commands.json
+/runs/*/data/
+graphify-out
+*.sh
+*.md
+!README.md

@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "town": "Town01",
+  "scenarios": [
+    {
+      "episode_id": 0,
+      "seed": 22261016,
+      "weather": "ClearNoon"
+    }
+  ]
+}

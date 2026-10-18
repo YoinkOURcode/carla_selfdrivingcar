@@ -1,0 +1,462 @@
+{
+  "available": true,
+  "episodes": 10,
+  "transitions": 11880,
+  "episode_ids": [
+    8,
+    14,
+    22,
+    30,
+    43,
+    59,
+    63,
+    76,
+    86,
+    91
+  ],
+  "known_fields": "applied controls and episode-constant weather; excluded from prediction RMSE",
+  "horizons": {
+    "1": {
+      "branches": 128,
+      "seconds": 0.1,
+      "normalized_rmse": 0.5673254990575232,
+      "context_mae": {
+        "forward_speed_mps": 0.5088700652122498,
+        "left_speed_mps": 0.02996525913476944,
+        "forward_acceleration_mps2": 1.2509686946868896,
+        "left_acceleration_mps2": 0.3129930794239044,
+        "left_yaw_rate_radps": 0.020519593730568886,
+        "previous_steering": 0.0,
+        "previous_throttle": 0.0,
+        "previous_brake": 0.0,
+        "lane_offset_left_m": 0.2514622211456299,
+        "heading_error_sin": 0.034442268311977386,
+        "heading_error_cos": 0.03331965580582619,
+        "speed_limit_mps": 0.2453315556049347,
+        "cautious_target_speed_mps": 0.5072354078292847,
+        "route_remaining_m": 79.39066314697266,
+        "light_distance_m": 10.072424795113358,
+        "stop_sign_distance_m": 0.0,
+        "rain_percent": 0.0,
+        "wetness_percent": 0.0,
+        "fog_percent": 0.0,
+        "sun_altitude_degrees": 0.0
+      },
+      "heading_angle_mae_rad": 0.042716949556506734,
+      "reward_sum_mae": 0.6000480453712953,
+      "reward_sum_bias": -0.5641380712459068,
+      "presence_brier": 0.03261322631020391,
+      "object_class_accuracy_when_present": 0.9850746268656716,
+      "light_accuracy": 0.9921875
+    },
+    "3": {
+      "branches": 127,
+      "seconds": 0.30000000000000004,
+      "normalized_rmse": 0.9010299825868365,
+      "context_mae": {
+        "forward_speed_mps": 0.6594746507058932,
+        "left_speed_mps": 0.03925495823537271,
+        "forward_acceleration_mps2": 2.256226547121063,
+        "left_acceleration_mps2": 0.475957044466274,
+        "left_yaw_rate_radps": 0.02488478337685893,
+        "previous_steering": 0.0,
+        "previous_throttle": 0.0,
+        "previous_brake": 0.0,
+        "lane_offset_left_m": 0.2918688255970872,
+        "heading_error_sin": 0.04466350435271976,
+        "heading_error_cos": 0.038830963645394394,
+        "speed_limit_mps": 0.3460636589470811,
+        "cautious_target_speed_mps": 0.5229505403773991,
+        "route_remaining_m": 81.23615895669292,
+        "light_distance_m": 11.264853902382425,
+        "stop_sign_distance_m": 0.0,
+        "rain_percent": 0.0,
+        "wetness_percent": 0.0,
+        "fog_percent": 0.0,
+        "sun_altitude_degrees": 0.0
+      },
+      "heading_angle_mae_rad": 0.05502659064217096,
+      "reward_sum_mae": 4.770250492982243,
+      "reward_sum_bias": 3.2048761695513397,
+      "presence_brier": 0.03759752094909947,
+      "object_class_accuracy_when_present": 0.9777777777777777,
+      "light_accuracy": 0.9763779527559056
+    },
+    "5": {
+      "branches": 126,
+      "seconds": 0.5,
+      "normalized_rmse": 0.7550497275040347,
+      "context_mae": {
+        "forward_speed_mps": 0.7546193561856709,
+        "left_speed_mps": 0.029297700003972128,
+        "forward_acceleration_mps2": 1.7438123188321553,
+        "left_acceleration_mps2": 0.27061668274894596,
+        "left_yaw_rate_radps": 0.02445976317874969,
+        "previous_steering": 0.0,
+        "previous_throttle": 0.0,
+        "previous_brake": 0.0,
+        "lane_offset_left_m": 0.32338793315584696,
+        "heading_error_sin": 0.05287514414106097,
+        "heading_error_cos": 0.048216464027525885,
+        "speed_limit_mps": 0.42889725215851315,
+        "cautious_target_speed_mps": 0.45747266496930805,
+        "route_remaining_m": 82.86407955109127,
+        "light_distance_m": 11.83069580078125,
+        "stop_sign_distance_m": 0.0,
+        "rain_percent": 0.0,
+        "wetness_percent": 0.0,
+        "fog_percent": 0.0,
+        "sun_altitude_degrees": 0.0
+      },
+      "heading_angle_mae_rad": 0.07969722212920527,
+      "reward_sum_mae": 3.383072899624942,
+      "reward_sum_bias": -2.7376307659146804,
+      "presence_brier": 0.04149196823036907,
+      "object_class_accuracy_when_present": 0.9696969696969697,
+      "light_accuracy": 0.9444444444444444
+    }
+  },
+  "termination": {
+    "positive_count": 6,
+    "negative_count": 11874,
+    "true_positive": 1,
+    "false_positive": 3,
+    "false_negative": 5,
+    "true_negative": 11871,
+    "threshold": 0.5,
+    "brier": 0.0005686019430868328,
+    "recall": 0.16666666666666666,
+    "precision": 0.25,
+    "logit_offset": -7.317173004150391,
+    "latent_input": "action-conditioned prior means from full posterior histories; causal current physical context, distance-sorted visible object geometry, controls/light and applied action",
+    "endings": [
+      {
+        "episode_id": 30,
+        "transition": 832,
+        "reason": "success",
+        "weather": "ClearNoon",
+        "probability": 0.37882381677627563,
+        "visible_objects_before": 3,
+        "nonterminal_scores_at_or_above": 4
+      },
+      {
+        "episode_id": 43,
+        "transition": 1794,
+        "reason": "success",
+        "weather": "HardRainNight",
+        "probability": 0.07284524291753769,
+        "visible_objects_before": 1,
+        "nonterminal_scores_at_or_above": 8
+      },
+      {
+        "episode_id": 59,
+        "transition": 1591,
+        "reason": "success",
+        "weather": "FogNight",
+        "probability": 0.9284504055976868,
+        "visible_objects_before": 1,
+        "nonterminal_scores_at_or_above": 1
+      },
+      {
+        "episode_id": 76,
+        "transition": 28,
+        "reason": "collision",
+        "weather": "HardRainNoon",
+        "probability": 2.370641877247337e-12,
+        "visible_objects_before": 3,
+        "nonterminal_scores_at_or_above": 9642
+      },
+      {
+        "episode_id": 86,
+        "transition": 73,
+        "reason": "collision",
+        "weather": "HardRainNoon",
+        "probability": 6.096141369482666e-10,
+        "visible_objects_before": 2,
+        "nonterminal_scores_at_or_above": 6200
+      },
+      {
+        "episode_id": 91,
+        "transition": 356,
+        "reason": "collision",
+        "weather": "HardRainNoon",
+        "probability": 1.379881764407287e-09,
+        "visible_objects_before": 2,
+        "nonterminal_scores_at_or_above": 5453
+      }
+    ],
+    "by_episode": [
+      {
+        "episode_id": 8,
+        "weather": "HardRainNight",
+        "reason": "time_limit",
+        "positive_count": 0,
+        "negative_count": 1800,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 0,
+        "true_negative": 1800,
+        "threshold": 0.5,
+        "brier": 8.73575554578565e-05,
+        "recall": null,
+        "precision": null
+      },
+      {
+        "episode_id": 14,
+        "weather": "FogNight",
+        "reason": "time_limit",
+        "positive_count": 0,
+        "negative_count": 1800,
+        "true_positive": 0,
+        "false_positive": 1,
+        "false_negative": 0,
+        "true_negative": 1799,
+        "threshold": 0.5,
+        "brier": 0.00026352141867391765,
+        "recall": null,
+        "precision": 0.0
+      },
+      {
+        "episode_id": 22,
+        "weather": "ClearNight",
+        "reason": "time_limit",
+        "positive_count": 0,
+        "negative_count": 1800,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 0,
+        "true_negative": 1800,
+        "threshold": 0.5,
+        "brier": 6.320847774077265e-07,
+        "recall": null,
+        "precision": null
+      },
+      {
+        "episode_id": 30,
+        "weather": "ClearNoon",
+        "reason": "success",
+        "positive_count": 1,
+        "negative_count": 832,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 1,
+        "true_negative": 832,
+        "threshold": 0.5,
+        "brier": 0.0004965696134604514,
+        "recall": 0.0,
+        "precision": null
+      },
+      {
+        "episode_id": 43,
+        "weather": "HardRainNight",
+        "reason": "success",
+        "positive_count": 1,
+        "negative_count": 1794,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 1,
+        "true_negative": 1794,
+        "threshold": 0.5,
+        "brier": 0.00047893551527522504,
+        "recall": 0.0,
+        "precision": null
+      },
+      {
+        "episode_id": 59,
+        "weather": "FogNight",
+        "reason": "success",
+        "positive_count": 1,
+        "negative_count": 1591,
+        "true_positive": 1,
+        "false_positive": 1,
+        "false_negative": 0,
+        "true_negative": 1590,
+        "threshold": 0.5,
+        "brier": 0.0006296964129433036,
+        "recall": 1.0,
+        "precision": 0.5
+      },
+      {
+        "episode_id": 63,
+        "weather": "HardRainNight",
+        "reason": "time_limit",
+        "positive_count": 0,
+        "negative_count": 1800,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 0,
+        "true_negative": 1800,
+        "threshold": 0.5,
+        "brier": 3.986085905793857e-10,
+        "recall": null,
+        "precision": null
+      },
+      {
+        "episode_id": 76,
+        "weather": "HardRainNoon",
+        "reason": "collision",
+        "positive_count": 1,
+        "negative_count": 28,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 1,
+        "true_negative": 28,
+        "threshold": 0.5,
+        "brier": 0.03448275849223137,
+        "recall": 0.0,
+        "precision": null
+      },
+      {
+        "episode_id": 86,
+        "weather": "HardRainNoon",
+        "reason": "collision",
+        "positive_count": 1,
+        "negative_count": 73,
+        "true_positive": 0,
+        "false_positive": 0,
+        "false_negative": 1,
+        "true_negative": 73,
+        "threshold": 0.5,
+        "brier": 0.013513514772057533,
+        "recall": 0.0,
+        "precision": null
+      },
+      {
+        "episode_id": 91,
+        "weather": "HardRainNoon",
+        "reason": "collision",
+        "positive_count": 1,
+        "negative_count": 356,
+        "true_positive": 0,
+        "false_positive": 1,
+        "false_negative": 1,
+        "true_negative": 355,
+        "threshold": 0.5,
+        "brier": 0.005172163713723421,
+        "recall": 0.0,
+        "precision": 0.0
+      }
+    ],
+    "false_positive_groups": [
+      {
+        "episode_id": 14,
+        "weather": "FogNight",
+        "first_transition": 1629,
+        "last_transition": 1629,
+        "count": 1,
+        "decision_seconds": 0.1,
+        "probability_range": [
+          0.5631415843963623,
+          0.5631415843963623
+        ],
+        "speed_range_mps": [
+          3.8800508975982666,
+          3.8800508975982666
+        ],
+        "route_remaining_range_m": [
+          233.0141143798828,
+          233.0141143798828
+        ],
+        "visible_objects_before_range": [
+          1,
+          1
+        ]
+      },
+      {
+        "episode_id": 59,
+        "weather": "FogNight",
+        "first_transition": 1590,
+        "last_transition": 1590,
+        "count": 1,
+        "decision_seconds": 0.1,
+        "probability_range": [
+          0.9986764788627625,
+          0.9986764788627625
+        ],
+        "speed_range_mps": [
+          4.2785444259643555,
+          4.2785444259643555
+        ],
+        "route_remaining_range_m": [
+          3.507162094116211,
+          3.507162094116211
+        ],
+        "visible_objects_before_range": [
+          1,
+          1
+        ]
+      },
+      {
+        "episode_id": 91,
+        "weather": "HardRainNoon",
+        "first_transition": 176,
+        "last_transition": 176,
+        "count": 1,
+        "decision_seconds": 0.1,
+        "probability_range": [
+          0.9069541096687317,
+          0.9069541096687317
+        ],
+        "speed_range_mps": [
+          5.016508102416992,
+          5.016508102416992
+        ],
+        "route_remaining_range_m": [
+          431.6059265136719,
+          431.6059265136719
+        ],
+        "visible_objects_before_range": [
+          1,
+          1
+        ]
+      }
+    ],
+    "false_positive_group_count": 3,
+    "false_positive_groups_limit": 20
+  },
+  "collision_events": 3,
+  "collision_modeling": "aggregate termination head; inspect missed collisions",
+  "learning_reward_contract": {
+    "version": "event-cost-view-v1",
+    "red_light_multiplier": 10,
+    "collision_multiplier": 5
+  },
+  "termination_fit": {
+    "method": "causal-observation-train-internal-v1",
+    "source_sha256": "169937a2ef124571b75588b4a44099b003bae9fa9c0b960edcce596c7c9ddec8",
+    "internal_selection": {
+      "spec": {
+        "hidden": 128,
+        "weight_decay": 0.0001,
+        "noise": 0.5
+      },
+      "updates": 2000,
+      "metrics": {
+        "positive_count": 29,
+        "negative_count": 45035,
+        "true_positive": 11,
+        "false_positive": 1,
+        "false_negative": 18,
+        "true_negative": 45034,
+        "threshold": 0.5,
+        "brier": 0.0004063703236170113,
+        "recall": 0.3793103448275862,
+        "precision": 0.9166666666666666
+      }
+    },
+    "updates": 66000,
+    "final_readout_updates": 2000,
+    "training_metrics": {
+      "positive_count": 151,
+      "negative_count": 227397,
+      "true_positive": 89,
+      "false_positive": 24,
+      "false_negative": 62,
+      "true_negative": 227373,
+      "threshold": 0.5,
+      "brier": 0.00027169546228833497,
+      "recall": 0.5894039735099338,
+      "precision": 0.7876106194690266
+    }
+  }
+}

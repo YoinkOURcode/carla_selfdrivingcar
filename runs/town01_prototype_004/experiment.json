@@ -1,0 +1,60 @@
+{
+  "status": "not_evaluated_calibration_superseded",
+  "created_utc": "2026-10-17T03:15:18.874232+00:00",
+  "source_data": "runs/manual/data",
+  "source_model": "runs/town01_prototype_001/world_model.pt",
+  "method": "Fresh expert-anchored SAC with geometry_v1 counterfactual training labels on current structured training states. Pure network policy at driving time; no geometric/expert controller override. Uses existing frozen attention/RSSM and 25% synthetic replay.",
+  "teacher_provenance": "Observed-state pursuit, conservative curvature speed, observed lead/pedestrian clearance and red/yellow stopping. Labels are counterfactual teacher requests, not measured actions. Dynamics/critic replay retains real executed actions/rewards.",
+  "motivation": "Experiment002 succeeds in both FogNight development routes but collides in seven other drives. Test whether explicit cornering/following-speed training targets improve reliability. No final outcomes used.",
+  "source_files": {
+    "__init__.py": "5b52c39b87987e3fabe28f4d1f9103511867993b8d068ff63f9f084b9b8d2a78",
+    "config.py": "71815c261a248e86f98dee9c941bf526853762b6df38a808fea0739a70d74764",
+    "schema.py": "9166a5bdc0bb8e0ac11ec393b2da6f6a4ff12f0be287fd54121c6b0696b63ac4",
+    "control.py": "97ec42096093899eb845304158ac44728a083e4892f1400d44225cb7c2e81874",
+    "geometry.py": "24480616f843179cb439fa4ab343a017737b28fd76dad5ffc309f48ef715cb5f",
+    "data.py": "c135694dcf73d7e93261f976c4534625f30be2340eac8f562709145ea1ac88a7",
+    "model.py": "b2e2fc30fe979b33a8adbe2b35b2fe98a9db82b702293ffa2b7152e28b742fc6",
+    "sac.py": "72b8830a5d983688c85cc371b870e8c0f521c02a048759df2d4a05eb8be1ac38",
+    "observations.py": "6343add036163c91f2b2a2bd5cdd9f5fdfbdeeb5b888721fc78292d8569f249e",
+    "rewards.py": "62b98072493c631b62af2051bfb481714c787fbd3da318fd00406b345955337e",
+    "environment.py": "6f0f8f60bd63648a19e880884286f8c61a4149199113c7dccce6178dcc3c91e1",
+    "training.py": "9f9437dea2b9c586b2d5a3ed3bb10e384da59b6dcf5726f138a282395aa99714",
+    "runner.py": "ab92a239ec79d1200157698030a88eaeb88d06a24ef2751c7dabd03a3bba9de6",
+    "__main__.py": "2f9a1d71c5768a8a2f92240f82280a81d0c1200a44da569de5f308810c411b0b",
+    "viewer.py": "d04e7e25fd5e1256af68b80a64b40f7d60ed81bb6c129fc8384be891fb7fde9c",
+    "evaluation.py": "5ec13879dbe453de281359cb58af4eea0dbac335a830561f88c02dcfa6ddeb60",
+    "policy.py": "7f5398ec606f722a34767423d922467ee6c532af3b7366f7073d45b8125a7d59",
+    "teachers.py": "ffdb26e56b92b08a5518bf112e033c8eb8a94ed5b36077ef18c450496d5a92fd"
+  },
+  "final_plan": "Same untouched 50 scenarios fixed before experiment001.",
+  "commands": [
+    [
+      "venv/bin/python",
+      "-m",
+      "world_model_rl",
+      "train",
+      "--config",
+      "runs/town01_prototype_004/config.json",
+      "--data",
+      "runs/manual/data",
+      "--model",
+      "runs/town01_prototype_001/world_model.pt",
+      "--output",
+      "runs/town01_prototype_004",
+      "--policy-updates",
+      "2000"
+    ]
+  ],
+  "live_tool_session": null,
+  "tests": "77 passed",
+  "policy_training": {
+    "warmup_updates": 50000,
+    "sac_updates": 2000,
+    "teacher": "geometry_v1"
+  },
+  "new_collision_evidence": {
+    "report": "runs/town01_collection_001/collision_provenance.json",
+    "finding": "Episodes110,113,115 collide with stopped lead vehicles. Immediately before collision the expert requests brake0.5 while ego forward speeds are about5.60,5.65,2.12m/s and bumper clearances are approximately0.00,0.01,0.30m. Conservative earlier following-speed labels are intended to address this, but actual development performance is unproven."
+  },
+  "reason": "Live physics readout showed the approximate geometry_v1 steering-angle denominator was too small. Retain this trained artifact, but prioritize calibrated geometry_v2 before spending driving evaluation budget. No driving-performance claim is made for experiment004."
+}

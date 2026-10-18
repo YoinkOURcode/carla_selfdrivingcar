@@ -1,0 +1,84 @@
+{
+  "records": [
+    {
+      "updates": 500,
+      "natural_holdout_nll": 0.0026180970016866922,
+      "metrics": {
+        "positive_count": 19,
+        "negative_count": 45045,
+        "true_positive": 1,
+        "false_positive": 1,
+        "false_negative": 18,
+        "true_negative": 45044,
+        "threshold": 0.5,
+        "brier": 0.0003870084183290601,
+        "recall": 0.05263157894736842,
+        "precision": 0.5
+      }
+    },
+    {
+      "updates": 1000,
+      "natural_holdout_nll": 0.0031598438508808613,
+      "metrics": {
+        "positive_count": 19,
+        "negative_count": 45045,
+        "true_positive": 1,
+        "false_positive": 6,
+        "false_negative": 18,
+        "true_negative": 45039,
+        "threshold": 0.5,
+        "brier": 0.0004617302620317787,
+        "recall": 0.05263157894736842,
+        "precision": 0.14285714285714285
+      }
+    },
+    {
+      "updates": 2000,
+      "natural_holdout_nll": 0.003349107224494219,
+      "metrics": {
+        "positive_count": 19,
+        "negative_count": 45045,
+        "true_positive": 1,
+        "false_positive": 1,
+        "false_negative": 18,
+        "true_negative": 45044,
+        "threshold": 0.5,
+        "brier": 0.0003961523761972785,
+        "recall": 0.05263157894736842,
+        "precision": 0.5
+      }
+    },
+    {
+      "updates": 4000,
+      "natural_holdout_nll": 0.0035769068636000156,
+      "metrics": {
+        "positive_count": 19,
+        "negative_count": 45045,
+        "true_positive": 3,
+        "false_positive": 2,
+        "false_negative": 16,
+        "true_negative": 45043,
+        "threshold": 0.5,
+        "brier": 0.00037255187635309994,
+        "recall": 0.15789473684210525,
+        "precision": 0.6
+      }
+    }
+  ],
+  "selected": {
+    "updates": 500,
+    "natural_holdout_nll": 0.0026180970016866922,
+    "metrics": {
+      "positive_count": 19,
+      "negative_count": 45045,
+      "true_positive": 1,
+      "false_positive": 1,
+      "false_negative": 18,
+      "true_negative": 45044,
+      "threshold": 0.5,
+      "brier": 0.0003870084183290601,
+      "recall": 0.05263157894736842,
+      "precision": 0.5
+    }
+  }
+}

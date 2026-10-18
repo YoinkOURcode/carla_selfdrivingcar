@@ -1,0 +1,16 @@
+{
+  "recorded_utc": "2026-10-17T14:35:06.020263+00:00",
+  "checkpoint": "runs/town01_experiment_001/provenance/resume_20261017_1434/agent.pt",
+  "sha256": "f92897059dd0d0ca3632027740c3826fd1a0d8fd419cfa8b9ade309cb9c5b682",
+  "sac_updates": 326000,
+  "warmup_updates": 100000,
+  "block_updates_done": 6000,
+  "imagination_refresh_aligned": true,
+  "last_logged_updates": 326600,
+  "updates_after_last_checkpoint_not_recoverable": 600,
+  "original_deadline_unix": 1792255630.635958,
+  "clock_reset": false,
+  "observed_previous_training_processes": "absent",
+  "observed_CARLA_listener": "absent",
+  "observed_CUDA_allocation": "CUDA-capable device(s) is/are busy or unavailable"
+}

@@ -1,0 +1,19 @@
+{
+  "fit": {
+    "updates": 28,
+    "natural_nll_sum": 19.30627389734179,
+    "l2": 0.001
+  },
+  "metrics": {
+    "positive_count": 52,
+    "negative_count": 227496,
+    "true_positive": 52,
+    "false_positive": 1,
+    "false_negative": 0,
+    "true_negative": 227495,
+    "threshold": 0.5,
+    "brier": 1.2174193659643156e-05,
+    "recall": 1.0,
+    "precision": 0.9811320754716981
+  }
+}

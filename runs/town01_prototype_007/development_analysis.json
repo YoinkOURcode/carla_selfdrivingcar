@@ -1,0 +1,86 @@
+{
+  "source": "development_evaluation.json",
+  "metrics": {
+    "successes": 5,
+    "collision_episodes": 1,
+    "red_light_violations": 10,
+    "red_light_episodes": 7,
+    "red_light_episode_rate": 0.7,
+    "success_rate": 0.5,
+    "collision_episode_rate": 0.1,
+    "mean_return": 769.1323623657227,
+    "mean_route_completion": 0.8490178022755177,
+    "completed_episodes": 10,
+    "planned_episodes": 10,
+    "complete": true,
+    "per_weather": {
+      "ClearNoon": {
+        "episodes": 2,
+        "successes": 1,
+        "collision_episodes": 0,
+        "red_light_violations": 4,
+        "red_light_episodes": 2,
+        "red_light_episode_rate": 1.0,
+        "success_rate": 0.5,
+        "collision_episode_rate": 0.0,
+        "mean_return": 905.8943786621094,
+        "mean_route_completion": 0.9204648365610448
+      },
+      "HardRainNoon": {
+        "episodes": 2,
+        "successes": 1,
+        "collision_episodes": 0,
+        "red_light_violations": 1,
+        "red_light_episodes": 1,
+        "red_light_episode_rate": 0.5,
+        "success_rate": 0.5,
+        "collision_episode_rate": 0.0,
+        "mean_return": 744.7926330566406,
+        "mean_route_completion": 0.8988132971593479
+      },
+      "ClearNight": {
+        "episodes": 2,
+        "successes": 1,
+        "collision_episodes": 1,
+        "red_light_violations": 1,
+        "red_light_episodes": 1,
+        "red_light_episode_rate": 0.5,
+        "success_rate": 0.5,
+        "collision_episode_rate": 0.5,
+        "mean_return": 376.0254898071289,
+        "mean_route_completion": 0.6093180129420549
+      },
+      "HardRainNight": {
+        "episodes": 2,
+        "successes": 0,
+        "collision_episodes": 0,
+        "red_light_violations": 1,
+        "red_light_episodes": 1,
+        "red_light_episode_rate": 0.5,
+        "success_rate": 0.0,
+        "collision_episode_rate": 0.0,
+        "mean_return": 784.7198181152344,
+        "mean_route_completion": 0.82254372515436
+      },
+      "FogNight": {
+        "episodes": 2,
+        "successes": 2,
+        "collision_episodes": 0,
+        "red_light_violations": 3,
+        "red_light_episodes": 2,
+        "red_light_episode_rate": 1.0,
+        "success_rate": 1.0,
+        "collision_episode_rate": 0.0,
+        "mean_return": 1034.2294921875,
+        "mean_route_completion": 0.9939491395607815
+      }
+    },
+    "prototype_acceptance": {
+      "eligible": false,
+      "required_success_rate": 0.8,
+      "maximum_collision_episode_rate": 0.1,
+      "passed": false
+    }
+  },
+  "decision": "Rejected as prototype candidate: only 5/10 successes, confirmed red-light violations. Fixed final50 not run."
+}

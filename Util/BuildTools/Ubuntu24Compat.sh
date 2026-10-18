@@ -17,6 +17,30 @@
 _WRAP_DIR="${CARLA_BUILD_FOLDER}"
 mkdir -p "${_WRAP_DIR}"
 
+# Old UE4 clang cannot parse the C++ headers shipped with newer GCC releases.
+# Use a compatible local GCC installation if the host headers fail a probe.
+_CC_REAL="${CC}"
+_CXX_REAL="${CXX}"
+_GCC_TOOLCHAIN=""
+_CXX_TEST_SRC="$(mktemp /tmp/ue4_cxx_test_XXXXXX.cpp)"
+printf '#include <string>\n#include <locale>\n#include <complex>\nint main(){const std::complex<double> z(1,2);std::string s="ok";return s.size()!=2 || z.real()!=1;}\n' > "${_CXX_TEST_SRC}"
+if ! "${CXX}" -std=c++14 -fsyntax-only "${_CXX_TEST_SRC}" 2>/dev/null; then
+    _SDK_ROOT="$(dirname "$(dirname "${_CXX_REAL}")")"
+    for _GCC_CANDIDATE in "${CARLA_GCC_TOOLCHAIN:-${CARLA_BUILD_FOLDER}/gcc12-toolchain/usr}" "${_SDK_ROOT}"; do
+        if "${CXX}" --gcc-toolchain="${_GCC_CANDIDATE}" -std=c++14 -fsyntax-only "${_CXX_TEST_SRC}" 2>/dev/null; then
+            _GCC_TOOLCHAIN="${_GCC_CANDIDATE}"
+            break
+        fi
+    done
+    if [ -z "${_GCC_TOOLCHAIN}" ]; then
+        rm -f "${_CXX_TEST_SRC}"
+        echo "ERROR: The UE4 compiler cannot compile with the available C++ headers."
+        echo "       Set CARLA_GCC_TOOLCHAIN to a compatible GCC installation."
+        exit 1
+    fi
+fi
+rm -f "${_CXX_TEST_SRC}"
+
 # ---------------------------------------------------------------------------
 # 1. Bundled ld compatibility check
 # ---------------------------------------------------------------------------
@@ -35,16 +59,24 @@ if ${_NEED_LLD}; then
         echo "       Install lld and try again:  sudo apt install lld"
         exit 1
     fi
-    _CC_REAL="${CC}"
-    _CXX_REAL="${CXX}"
+fi
+
+if ${_NEED_LLD} || [ -n "${_GCC_TOOLCHAIN}" ]; then
     CC="${_WRAP_DIR}/clang.sh"
     CXX="${_WRAP_DIR}/clang++.sh"
+    _COMPAT_FLAGS=""
+    if ${_NEED_LLD}; then
+        _COMPAT_FLAGS="-fuse-ld=lld -Wno-unused-command-line-argument"
+    fi
+    if [ -n "${_GCC_TOOLCHAIN}" ]; then
+        _COMPAT_FLAGS="${_COMPAT_FLAGS} --gcc-toolchain=\"${_GCC_TOOLCHAIN}\""
+    fi
     # -Wno-unused-command-line-argument silences the warning that -fuse-ld=lld
     # produces when clang is invoked for compilation only (not linking).
-    printf '#!/bin/bash\nexec "%s" -fuse-ld=lld -Wno-unused-command-line-argument "$@"\n' \
-        "${_CC_REAL}"  > "${CC}"
-    printf '#!/bin/bash\nexec "%s" -fuse-ld=lld -Wno-unused-command-line-argument "$@"\n' \
-        "${_CXX_REAL}" > "${CXX}"
+    printf '#!/bin/bash\nexec "%s" %s "$@"\n' \
+        "${_CC_REAL}" "${_COMPAT_FLAGS}" > "${CC}"
+    printf '#!/bin/bash\nexec "%s" %s "$@"\n' \
+        "${_CXX_REAL}" "${_COMPAT_FLAGS}" > "${CXX}"
     chmod +x "${CC}" "${CXX}"
     export CC CXX
     export PATH="${_WRAP_DIR}:${PATH}"
@@ -56,9 +88,10 @@ fi
 # Ubuntu 24+ ships Python as "externally managed" (PEP 668), so a bare
 # `pip install` into the system environment is blocked.  The wheel is still
 # built and placed in PythonAPI/carla/dist/ for manual installation.
-_OS_MAJOR=$(. /etc/os-release 2>/dev/null && printf '%s' "${VERSION_ID}" | cut -d. -f1)
-if [ "${_OS_MAJOR:-0}" -ge 24 ] 2>/dev/null; then
+if python3 -c 'import pathlib, sys, sysconfig; sys.exit(not (sys.prefix == sys.base_prefix and (pathlib.Path(sysconfig.get_path("stdlib")) / "EXTERNALLY-MANAGED").exists()))'; then
     export _SKIP_PIP_INSTALL=true
+else
+    unset _SKIP_PIP_INSTALL
 fi
 
 # ---------------------------------------------------------------------------
@@ -66,7 +99,7 @@ fi
 # ---------------------------------------------------------------------------
 _CMAKE_MAJOR=$(cmake --version 2>/dev/null | grep -oP '(?<=cmake version )\d+' | head -1)
 if [ "${_CMAKE_MAJOR:-0}" -ge 4 ]; then
-    printf '#!/bin/bash\nexec /usr/bin/cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 "$@"\n' \
+    printf '#!/bin/bash\nexec /usr/bin/cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_INSTALL_LIBDIR=lib "$@"\n' \
         > "${_WRAP_DIR}/cmake"
     chmod +x "${_WRAP_DIR}/cmake"
     # Only prepend to PATH if not already there (avoid duplicates on re-source)

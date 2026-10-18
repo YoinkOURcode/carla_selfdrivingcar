@@ -1,0 +1,4 @@
+{
+  "gate_passed": false,
+  "gate_reason": "termination precision tolerance failed"
+}

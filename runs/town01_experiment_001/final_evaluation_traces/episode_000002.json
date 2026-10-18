@@ -1,0 +1,556 @@
+{
+  "schema": "carla-structured-v1",
+  "config": {
+    "environment": {
+      "host": "127.0.0.1",
+      "port": 2000,
+      "tm_port": 8000,
+      "timeout": 30.0,
+      "town": "Town01",
+      "ego_model": "vehicle.tesla.model3",
+      "vehicles": 20,
+      "pedestrians": 20,
+      "child_fraction": 0.35,
+      "weather": [
+        "ClearNoon",
+        "HardRainNoon",
+        "ClearNight",
+        "HardRainNight",
+        "FogNight"
+      ],
+      "fixed_delta_seconds": 0.05,
+      "action_repeat": 2,
+      "max_steps": 1800,
+      "stuck_seconds": 60.0,
+      "offroad_seconds": 2.0,
+      "start_spawn": null,
+      "goal_spawn": null,
+      "min_route_metres": 80.0,
+      "max_route_metres": 600.0,
+      "visibility_metres": 70.0,
+      "field_of_view_degrees": 100.0,
+      "child_caution_metres": 30.0,
+      "child_lateral_metres": 10.0,
+      "child_speed_mps": 4.17,
+      "child_reaction_seconds": 1.0,
+      "caution_deceleration": 2.5,
+      "rain_speed_factor": 0.7,
+      "night_speed_factor": 0.7,
+      "fog_speed_factor": 0.5,
+      "steering_rate": 2.0,
+      "acceleration_command_rate": 2.5,
+      "braking_command_rate": 4.0,
+      "sensor_grace_seconds": 0.02,
+      "observation_provider": "ground_truth",
+      "no_rendering_mode": true
+    },
+    "reward": {
+      "progress": 2.0,
+      "success": 100.0,
+      "collision": 100.0,
+      "red_light": 20.0,
+      "stop_sign": 10.0,
+      "illegal_lane": 3.0,
+      "offroad": 10.0,
+      "wrong_way": 5.0,
+      "speeding": 0.1,
+      "unsafe_child": 1.0,
+      "unsafe_weather": 0.5,
+      "acceleration": 0.1,
+      "jerk": 0.1,
+      "steering_rate": 0.05,
+      "time": 0.05,
+      "comfort_filter_seconds": 0.3
+    },
+    "model": {
+      "embedding": 64,
+      "attention_heads": 4,
+      "deterministic": 128,
+      "stochastic": 32,
+      "hidden": 256,
+      "learning_rate": 0.0003,
+      "batch_size": 32,
+      "sequence_length": 20,
+      "burn_in": 5,
+      "kl_weight": 0.1,
+      "free_nats": 1.0,
+      "prior_prediction_weight": 0.5,
+      "gradient_clip": 100.0
+    },
+    "training": {
+      "seed": 20261016,
+      "device": "cuda",
+      "bootstrap_episodes": 20,
+      "pretrain_updates": 20000,
+      "policy_updates": 1000000000,
+      "policy_block_updates": 10000,
+      "collection_episodes": 0,
+      "refresh_updates": 0,
+      "replay_steps": 1000000,
+      "batch_size": 256,
+      "minimum_real_steps": 500,
+      "learning_rate": 0.0003,
+      "gamma": 0.997,
+      "tau": 0.005,
+      "initial_alpha": 0.001,
+      "imagination_horizon": 1,
+      "imagination_starts": 1024,
+      "synthetic_fraction": 0.25,
+      "validation_branches": 128,
+      "validation_episodes": 10,
+      "encoding_batch_episodes": 16,
+      "imagination_refresh_updates": 100,
+      "checkpoint_updates": 1000,
+      "failure_sequence_fraction": 0.5,
+      "termination_fit_updates": 2000,
+      "gate_normalized_rmse": 0.75,
+      "gate_speed_mae": 2.0,
+      "gate_lane_mae": 0.5,
+      "gate_heading_mae": 0.2,
+      "gate_reward_mae": 10.0,
+      "gate_terminal_brier": 0.2,
+      "gate_terminal_recall": 0.5,
+      "gate_terminal_precision": 0.5,
+      "gate_min_terminal_positive": 1,
+      "gate_min_terminal_negative": 20,
+      "behavior_cloning_updates": 100000,
+      "behavior_cloning_weight": 100,
+      "behavior_cloning_teacher": "geometry_v4",
+      "behavior_cloning_traffic_fraction": 0.5,
+      "behavior_cloning_permute_objects": true,
+      "policy_observation_skip": true,
+      "allow_scenario_variation": false,
+      "red_light_objective_multiplier": 10,
+      "collision_objective_multiplier": 5,
+      "behavior_cloning_applied_weight": 2.0,
+      "deterministic_algorithms": true,
+      "termination_context_skip": false,
+      "termination_observation_skip": true,
+      "termination_factorized": true
+    }
+  },
+  "episode_id": 2,
+  "split": "evaluation",
+  "seed": 21261018,
+  "town": "Carla/Maps/Town01",
+  "weather": "ClearNight",
+  "client_version": "e6c5fb9ce-dirty",
+  "server_version": "e6c5fb9ce-dirty",
+  "observation_source": "carla_ground_truth_with_geometric_visibility",
+  "start_spawn": 172,
+  "goal_spawn": 36,
+  "route_points": [
+    [
+      88.40988159179688,
+      262.330322265625
+    ],
+    [
+      88.41018676757812,
+      264.330322265625
+    ],
+    [
+      88.41049194335938,
+      266.330322265625
+    ],
+    [
+      88.4107894897461,
+      268.330322265625
+    ],
+    [
+      88.41109466552734,
+      270.330322265625
+    ],
+    [
+      88.4113998413086,
+      272.330322265625
+    ],
+    [
+      88.41170501708984,
+      274.330322265625
+    ],
+    [
+      88.4120101928711,
+      276.330322265625
+    ],
+    [
+      88.41231536865234,
+      278.330322265625
+    ],
+    [
+      88.4126205444336,
+      280.330322265625
+    ],
+    [
+      88.41291809082031,
+      282.330322265625
+    ],
+    [
+      88.41322326660156,
+      284.330322265625
+    ],
+    [
+      88.41352844238281,
+      286.330322265625
+    ],
+    [
+      88.41383361816406,
+      288.330322265625
+    ],
+    [
+      88.41413879394531,
+      290.330322265625
+    ],
+    [
+      88.41444396972656,
+      292.330322265625
+    ],
+    [
+      88.41474914550781,
+      294.330322265625
+    ],
+    [
+      88.41504669189453,
+      296.330322265625
+    ],
+    [
+      88.41535186767578,
+      298.330322265625
+    ],
+    [
+      88.41565704345703,
+      300.330322265625
+    ],
+    [
+      88.41596221923828,
+      302.330322265625
+    ],
+    [
+      88.41626739501953,
+      304.330322265625
+    ],
+    [
+      88.41657257080078,
+      306.330322265625
+    ],
+    [
+      88.4168701171875,
+      308.330322265625
+    ],
+    [
+      88.41717529296875,
+      310.330322265625
+    ],
+    [
+      88.41748046875,
+      312.330322265625
+    ],
+    [
+      88.41778564453125,
+      314.330322265625
+    ],
+    [
+      88.4182357788086,
+      317.30029296875
+    ],
+    [
+      88.59059143066406,
+      319.6147155761719
+    ],
+    [
+      89.17710876464844,
+      321.8959045410156
+    ],
+    [
+      90.1610107421875,
+      324.03594970703125
+    ],
+    [
+      91.51073455810547,
+      325.9662780761719
+    ],
+    [
+      93.18653869628906,
+      327.62652587890625
+    ],
+    [
+      95.13774108886719,
+      328.95733642578125
+    ],
+    [
+      97.29811096191406,
+      329.91180419921875
+    ],
+    [
+      99.59586334228516,
+      330.45819091796875
+    ],
+    [
+      101.6189193725586,
+      330.58905029296875
+    ],
+    [
+      103.6197738647461,
+      330.5899963378906
+    ],
+    [
+      105.6197738647461,
+      330.5902099609375
+    ],
+    [
+      107.6197738647461,
+      330.5904235839844
+    ],
+    [
+      109.6197738647461,
+      330.59063720703125
+    ],
+    [
+      111.6197738647461,
+      330.5908508300781
+    ],
+    [
+      113.6197738647461,
+      330.591064453125
+    ],
+    [
+      115.6197738647461,
+      330.5912780761719
+    ],
+    [
+      117.6197738647461,
+      330.59149169921875
+    ],
+    [
+      119.61978149414062,
+      330.5917053222656
+    ],
+    [
+      121.61978149414062,
+      330.5919189453125
+    ],
+    [
+      123.61978149414062,
+      330.5921325683594
+    ],
+    [
+      125.61978149414062,
+      330.59234619140625
+    ],
+    [
+      127.61978149414062,
+      330.5925598144531
+    ],
+    [
+      129.61978149414062,
+      330.5927734375
+    ],
+    [
+      131.61978149414062,
+      330.5929870605469
+    ],
+    [
+      133.61978149414062,
+      330.59320068359375
+    ],
+    [
+      135.61978149414062,
+      330.5934143066406
+    ],
+    [
+      137.61978149414062,
+      330.5936279296875
+    ],
+    [
+      139.61978149414062,
+      330.5938415527344
+    ],
+    [
+      141.61978149414062,
+      330.59405517578125
+    ],
+    [
+      143.61978149414062,
+      330.5942687988281
+    ],
+    [
+      145.61978149414062,
+      330.594482421875
+    ],
+    [
+      147.61978149414062,
+      330.5946960449219
+    ],
+    [
+      149.61978149414062,
+      330.59490966796875
+    ],
+    [
+      151.61978149414062,
+      330.5951232910156
+    ],
+    [
+      153.61978149414062,
+      330.5953369140625
+    ],
+    [
+      155.61978149414062,
+      330.5955505371094
+    ],
+    [
+      157.61978149414062,
+      330.59576416015625
+    ],
+    [
+      159.61978149414062,
+      330.5959777832031
+    ],
+    [
+      161.61978149414062,
+      330.59619140625
+    ],
+    [
+      163.61978149414062,
+      330.5964050292969
+    ],
+    [
+      165.61978149414062,
+      330.59661865234375
+    ],
+    [
+      167.61978149414062,
+      330.5968322753906
+    ],
+    [
+      169.61978149414062,
+      330.5970458984375
+    ],
+    [
+      171.61978149414062,
+      330.5972595214844
+    ],
+    [
+      173.61978149414062,
+      330.59747314453125
+    ],
+    [
+      175.61978149414062,
+      330.5976867675781
+    ],
+    [
+      177.61978149414062,
+      330.597900390625
+    ],
+    [
+      179.61978149414062,
+      330.5981140136719
+    ],
+    [
+      181.61978149414062,
+      330.59832763671875
+    ],
+    [
+      183.61978149414062,
+      330.5985412597656
+    ],
+    [
+      185.61978149414062,
+      330.5987548828125
+    ],
+    [
+      187.61978149414062,
+      330.5989685058594
+    ],
+    [
+      189.61978149414062,
+      330.59918212890625
+    ],
+    [
+      191.61978149414062,
+      330.5993957519531
+    ],
+    [
+      193.61978149414062,
+      330.599609375
+    ],
+    [
+      195.61978149414062,
+      330.5998229980469
+    ],
+    [
+      197.61978149414062,
+      330.60003662109375
+    ]
+  ],
+  "route_length_m": 171.82957031833905,
+  "vehicles": 20,
+  "pedestrians": 20,
+  "children": 7,
+  "ego_friction_factor": 1.0,
+  "collector": "sac",
+  "reward_version": "decision-comfort-v2",
+  "policy_updates": 1,
+  "component_names": [
+    "progress",
+    "success",
+    "collision",
+    "red_light",
+    "stop_sign",
+    "illegal_lane",
+    "offroad",
+    "wrong_way",
+    "speeding",
+    "unsafe_child",
+    "unsafe_weather",
+    "acceleration",
+    "jerk",
+    "steering_rate",
+    "time"
+  ],
+  "terminal_reason": "success",
+  "summary": {
+    "episode_id": 2,
+    "split": "evaluation",
+    "seed": 21261018,
+    "weather": "ClearNight",
+    "collector": "sac",
+    "return": 430.3320007324219,
+    "steps": 872,
+    "distance_metres": 168.12093108894837,
+    "sim_seconds": 87.2,
+    "wall_seconds": 34.19661982100115,
+    "route_completion": 0.9836500247744858,
+    "reset_seconds": 0.4459439989987004,
+    "success": true,
+    "terminal_reason": "success",
+    "event_decision_counts": {
+      "collision": 0,
+      "red_light": 0,
+      "stop_sign": 0,
+      "illegal_lane": 0,
+      "offroad": 0,
+      "wrong_way": 2,
+      "unsafe_child": 0,
+      "unsafe_weather": 0,
+      "success": 1
+    },
+    "event_totals": {
+      "collision": 0,
+      "red_light": 0,
+      "stop_sign": 0,
+      "illegal_lane": 0,
+      "offroad": 0,
+      "wrong_way": 2,
+      "unsafe_child": 0,
+      "unsafe_weather": 0,
+      "success": 1
+    },
+    "collisions_per_km": 0.0,
+    "mean_abs_lane_offset_m": 0.23033317201557235,
+    "mean_abs_heading_error_rad": 0.018267987690620078,
+    "mean_acceleration_mps2": 0.7869158851967879,
+    "mean_jerk_mps3": 2.146209431663591,
+    "mean_steering_rate_per_s": 0.02056166062826011
+  },
+  "evaluation_checkpoint": "runs/town01_experiment_001/agent.pt",
+  "usage": "evaluation_only_never_train"
+}

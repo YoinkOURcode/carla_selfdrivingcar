@@ -195,7 +195,7 @@ for PY_VERSION in ${PY_VERSION_LIST[@]} ; do
         ${py3_include} : ${py3_lib} ;" > project-config.jam
     fi
     if ${_NEED_LLD:-false}; then
-        echo "using clang : : \"${_CXX_REAL}\" : <linkflags>-fuse-ld=lld ;" >> project-config.jam
+        echo "using clang : : \"${CXX}\" : <linkflags>-fuse-ld=lld ;" >> project-config.jam
         _B2_LINK_EXTRA="linkflags=-fuse-ld=lld"
     else
         echo "using clang : : \"${CXX}\" ;" >> project-config.jam

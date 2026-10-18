@@ -1,0 +1,23 @@
+{
+  "initial_checkpoint": "runs/town01_experiment_001/checkpoints/agent_000028_initial_policy.pt",
+  "sha256_matches_clock": true,
+  "fresh_seeded_tensor_matches": {
+    "actor": true,
+    "q1": true,
+    "q2": true,
+    "target1": true,
+    "target2": true,
+    "log_alpha": true
+  },
+  "empty_optimizer_states": {
+    "actor_optimizer": true,
+    "q_optimizer": true,
+    "alpha_optimizer": true
+  },
+  "sac_updates": 0,
+  "warmup_updates": 0,
+  "source_model_kind": "world_model",
+  "source_model_sha256": "1719a2a65891e9f50a1551b6caa43a50a5f779f1bc64a27dbcd5c7e434cd5c0e",
+  "normalizer_train_only_audit": "normalizer_and_fresh_initialization_audit.json",
+  "result": "fresh actor, both critics, both targets and temperature match fresh seeded initialization exactly"
+}

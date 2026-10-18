@@ -1,0 +1,56 @@
+{
+  "format": 1,
+  "town": "Town01",
+  "scenarios": [
+    {
+      "episode_id": 0,
+      "seed": 22261016,
+      "weather": "ClearNoon"
+    },
+    {
+      "episode_id": 1,
+      "seed": 22261017,
+      "weather": "HardRainNoon"
+    },
+    {
+      "episode_id": 2,
+      "seed": 22261018,
+      "weather": "ClearNight"
+    },
+    {
+      "episode_id": 3,
+      "seed": 22261019,
+      "weather": "HardRainNight"
+    },
+    {
+      "episode_id": 4,
+      "seed": 22261020,
+      "weather": "FogNight"
+    },
+    {
+      "episode_id": 5,
+      "seed": 22261021,
+      "weather": "ClearNoon"
+    },
+    {
+      "episode_id": 6,
+      "seed": 22261022,
+      "weather": "HardRainNoon"
+    },
+    {
+      "episode_id": 7,
+      "seed": 22261023,
+      "weather": "ClearNight"
+    },
+    {
+      "episode_id": 8,
+      "seed": 22261024,
+      "weather": "HardRainNight"
+    },
+    {
+      "episode_id": 9,
+      "seed": 22261025,
+      "weather": "FogNight"
+    }
+  ]
+}

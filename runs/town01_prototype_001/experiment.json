@@ -1,0 +1,117 @@
+{
+  "objective": {
+    "town": "Town01",
+    "success_rate_min": 0.8,
+    "collision_episode_rate_max": 0.1,
+    "evaluation_episodes": 50,
+    "episodes_per_weather": 10
+  },
+  "source_data": "runs/manual/data",
+  "source_model": "runs/manual/world_model.pt",
+  "validation_policy": "All ten existing validation episodes, preserving assignments, including collisions, successes and nonterminal driving. No test episodes for fitting.",
+  "evaluation_seed_offset": 1000000,
+  "evaluation_usage": "Fixed final evaluation, never recorded into training data. Use a separate development seed range for tuning.",
+  "status": "rejected_on_development",
+  "created_utc": "2026-10-16T21:34:38.624979+00:00",
+  "evidence": {
+    "manual_agent_updates": 180000,
+    "manual_agent_model_rmse": 0.8461748897776864,
+    "manual_agent_model_gate_limit": 0.75,
+    "manual_validation_has_collisions": false
+  },
+  "method": "Reuse frozen compatible attention/RSSM dynamics; refit termination head using train split; initialize fresh SAC actor/critics with expert actor warm-up and expert-anchored SAC on 75% real / 25% imagined replay.",
+  "validation": {
+    "report": "runs/town01_prototype_001/world_model.validation.json",
+    "normalized_rmse": 0.5821226628209982,
+    "gate_passed": true,
+    "heldout_collision_endings_missed": 3
+  },
+  "policy": {
+    "warmup_updates": 10000,
+    "sac_updates_first_stage": 2000,
+    "demonstration_weight": 10,
+    "initial_alpha": 0.01,
+    "collection_episodes": 0,
+    "model_refresh_updates": 0
+  },
+  "frozen_final_evaluation_plan": "runs/town01_prototype_001/final_plan.json",
+  "source_files": {
+    "__init__.py": "5b52c39b87987e3fabe28f4d1f9103511867993b8d068ff63f9f084b9b8d2a78",
+    "__main__.py": "7beddd967fd2b5ed14695c94f8d0e11ee260173dc6a3575d6a97d81244533f3b",
+    "config.py": "daa2381d43cdbdc394265d0a8281da2bd9b117b348163f1e1c4eda9297d5a230",
+    "control.py": "97ec42096093899eb845304158ac44728a083e4892f1400d44225cb7c2e81874",
+    "data.py": "1eee080f328f72526f447a0ec9a735f75beb1a460707f5cdb1bc642783e1284b",
+    "environment.py": "4a72c5d1f52c32a9efa9e4e5b78c530afcb96f258351caa71b14719d9dd51746",
+    "evaluation.py": "5ec13879dbe453de281359cb58af4eea0dbac335a830561f88c02dcfa6ddeb60",
+    "geometry.py": "24480616f843179cb439fa4ab343a017737b28fd76dad5ffc309f48ef715cb5f",
+    "model.py": "b2e2fc30fe979b33a8adbe2b35b2fe98a9db82b702293ffa2b7152e28b742fc6",
+    "observations.py": "6343add036163c91f2b2a2bd5cdd9f5fdfbdeeb5b888721fc78292d8569f249e",
+    "rewards.py": "62b98072493c631b62af2051bfb481714c787fbd3da318fd00406b345955337e",
+    "runner.py": "744d97dee89556479f14d3ce409cdfeb804785df70e8f9a22c2f528860c2d87f",
+    "sac.py": "a9f716f9454eb0f0b365e5ea9cb90a977409dac54e94bdf809085dfe63ebdfbf",
+    "schema.py": "9166a5bdc0bb8e0ac11ec393b2da6f6a4ff12f0be287fd54121c6b0696b63ac4",
+    "training.py": "0988768049d53c8f72adfeb30b69f0c5b413d0954b751edecf0b132279ace390",
+    "viewer.py": "d04e7e25fd5e1256af68b80a64b40f7d60ed81bb6c129fc8384be891fb7fde9c"
+  },
+  "commands": [
+    [
+      "venv/bin/python",
+      "-m",
+      "world_model_rl",
+      "evaluate-model",
+      "--config",
+      "runs/town01_prototype_001/config.json",
+      "--data",
+      "runs/manual/data",
+      "--checkpoint",
+      "runs/manual/world_model.pt",
+      "--split",
+      "validation",
+      "--output",
+      "runs/town01_prototype_001/source_model_validation.json"
+    ],
+    [
+      "venv/bin/python",
+      "-m",
+      "world_model_rl",
+      "fit-termination",
+      "--config",
+      "runs/manual/config.json",
+      "--data",
+      "runs/manual/data",
+      "--checkpoint",
+      "runs/manual/world_model.pt",
+      "--output",
+      "runs/town01_prototype_001/world_model.pt",
+      "--updates",
+      "2000"
+    ],
+    [
+      "venv/bin/python",
+      "-m",
+      "world_model_rl",
+      "train",
+      "--config",
+      "runs/town01_prototype_001/config.json",
+      "--data",
+      "runs/manual/data",
+      "--model",
+      "runs/town01_prototype_001/world_model.pt",
+      "--output",
+      "runs/town01_prototype_001",
+      "--policy-updates",
+      "2000"
+    ]
+  ],
+  "source_model_sha256": "a13efc110090c7b8315df01c4d0f6cf4874d21e5f820826dda2213504c0a90ec",
+  "unit_tests": {
+    "command": "venv/bin/python -m pytest world_model_rl/tests -q",
+    "result": "66 passed"
+  },
+  "development": {
+    "success_rate": 0.0,
+    "collision_episode_rate": 1.0,
+    "episodes": 10,
+    "report": "runs/town01_prototype_001/development_evaluation.json"
+  }
+}

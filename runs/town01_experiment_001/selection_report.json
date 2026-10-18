@@ -1,0 +1,1016 @@
+{
+  "complete": true,
+  "rule": {
+    "format": 1,
+    "created_utc": "2026-10-17T11:28:06.759779+00:00",
+    "training_seconds": 18000,
+    "checkpoint_seconds": 300,
+    "clock_origin": "first valid model-fitting stage after fixed collection",
+    "candidate_schedule_seconds": [
+      3600,
+      7200,
+      10800,
+      14400,
+      18000
+    ],
+    "additional_candidate": "first completed mixed-replay SAC update after warm-up",
+    "candidate_rule": "First mixed-replay SAC checkpoint plus unique last SAC-trained agent at/before each hourly cutoff; final cutoff uses the actual optimizer-boundary deadline snapshot. Supervised-only checkpoints cannot substitute for SAC.",
+    "development_plan_sha256": "a09f24b3107e7e1931e611909ccc9d42f1cb3c22c753cf44081e375fdc9fad81",
+    "ranking_descending": [
+      "arrivals_without_recorded_violations",
+      "successes",
+      "negative_collision_episodes",
+      "negative_red_light_violations",
+      "mean_route_completion",
+      "negative_archive_index"
+    ],
+    "require_complete_development_plan": true,
+    "final_plan_sha256": "f8394b8ab3cfdec2c6418de7aabc190c4d9909a429270c3f3aab0e15e23fc838",
+    "final_evaluation_usage": "evaluation_only_never_train_or_select",
+    "policy_runtime": "deterministic neural SAC actor and shared action adapter only",
+    "last_cutoff_uses_final_deadline_snapshot": true,
+    "minimum_sac_updates": 1
+  },
+  "evaluated": [
+    {
+      "candidate": {
+        "path": "runs/town01_experiment_001/checkpoints/agent_000030_first_sac.pt",
+        "source": "runs/town01_experiment_001/agent.pt",
+        "stage": "first_sac",
+        "saved_unix": 1792243962.4305797,
+        "sha256": "16b218595c3b75d93cec7491a2c1a5b35c9c4404646fb381d562ca52a5014490",
+        "deadline_reached": false,
+        "policy_updates": 1,
+        "model_updates": 20000,
+        "warmup_updates": 100000,
+        "archive_index": 30
+      },
+      "metrics": {
+        "successes": 1,
+        "collision_episodes": 1,
+        "arrivals_without_recorded_violations": 0,
+        "monitored_violation_fields": [
+          "collision",
+          "red_light",
+          "stop_sign",
+          "illegal_lane",
+          "offroad",
+          "wrong_way",
+          "unsafe_child",
+          "unsafe_weather"
+        ],
+        "red_light_violations": 0,
+        "red_light_episodes": 0,
+        "red_light_episode_rate": 0.0,
+        "success_rate": 0.1,
+        "collision_episode_rate": 0.1,
+        "mean_return": 533.8193050384522,
+        "mean_route_completion": 0.62825469227058,
+        "completed_episodes": 10,
+        "planned_episodes": 10,
+        "complete": true,
+        "per_weather": {
+          "ClearNoon": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.0,
+            "mean_return": 512.0259246826172,
+            "mean_route_completion": 0.5199977669332798
+          },
+          "HardRainNoon": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.0,
+            "mean_return": 569.3634033203125,
+            "mean_route_completion": 0.7276057171600672
+          },
+          "ClearNight": {
+            "episodes": 2,
+            "successes": 1,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.5,
+            "collision_episode_rate": 0.0,
+            "mean_return": 628.7091674804688,
+            "mean_route_completion": 0.8154216504030594
+          },
+          "HardRainNight": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.0,
+            "mean_return": 656.7745361328125,
+            "mean_route_completion": 0.6711846033579287
+          },
+          "FogNight": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 1,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.5,
+            "mean_return": 302.2234935760498,
+            "mean_route_completion": 0.407063723498565
+          }
+        },
+        "prototype_acceptance": {
+          "eligible": false,
+          "required_success_rate": 0.8,
+          "maximum_collision_episode_rate": 0.1,
+          "passed": false
+        }
+      },
+      "report": "runs/town01_experiment_001/development/candidate_000030.json"
+    },
+    {
+      "candidate": {
+        "path": "runs/town01_experiment_001/checkpoints/agent_000032_sac.pt",
+        "source": "runs/town01_experiment_001/agent.pt",
+        "stage": "sac",
+        "saved_unix": 1792244562.4683795,
+        "sha256": "0c1bb072ed15c75b9bd8b570a5760bdecbf0a7ad6144155988f1e5ff47037259",
+        "deadline_reached": false,
+        "policy_updates": 71865,
+        "model_updates": 20000,
+        "warmup_updates": 100000,
+        "archive_index": 32
+      },
+      "metrics": {
+        "successes": 1,
+        "collision_episodes": 2,
+        "arrivals_without_recorded_violations": 0,
+        "monitored_violation_fields": [
+          "collision",
+          "red_light",
+          "stop_sign",
+          "illegal_lane",
+          "offroad",
+          "wrong_way",
+          "unsafe_child",
+          "unsafe_weather"
+        ],
+        "red_light_violations": 0,
+        "red_light_episodes": 0,
+        "red_light_episode_rate": 0.0,
+        "success_rate": 0.1,
+        "collision_episode_rate": 0.2,
+        "mean_return": 455.6445140838623,
+        "mean_route_completion": 0.5595756872624092,
+        "completed_episodes": 10,
+        "planned_episodes": 10,
+        "complete": true,
+        "per_weather": {
+          "ClearNoon": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.0,
+            "mean_return": 514.175048828125,
+            "mean_route_completion": 0.5211277760728936
+          },
+          "HardRainNoon": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.0,
+            "mean_return": 521.8210754394531,
+            "mean_route_completion": 0.6777743472535117
+          },
+          "ClearNight": {
+            "episodes": 2,
+            "successes": 1,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.5,
+            "collision_episode_rate": 0.0,
+            "mean_return": 632.6308288574219,
+            "mean_route_completion": 0.81715450774552
+          },
+          "HardRainNight": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 1,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.5,
+            "mean_return": 257.06868743896484,
+            "mean_route_completion": 0.330034362430564
+          },
+          "FogNight": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 1,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.5,
+            "mean_return": 352.5269298553467,
+            "mean_route_completion": 0.4517874428095572
+          }
+        },
+        "prototype_acceptance": {
+          "eligible": false,
+          "required_success_rate": 0.8,
+          "maximum_collision_episode_rate": 0.1,
+          "passed": false
+        }
+      },
+      "report": "runs/town01_experiment_001/development/candidate_000032.json"
+    },
+    {
+      "candidate": {
+        "path": "runs/town01_experiment_001/checkpoints/agent_000042_initial_policy.pt",
+        "source": "runs/town01_experiment_001/agent.pt",
+        "stage": "initial_policy",
+        "saved_unix": 1792247717.9185197,
+        "sha256": "d45de1cb83158b8de7118ab389536d5732b7a10120a8f50b8174d0805138301f",
+        "deadline_reached": false,
+        "policy_updates": 326000,
+        "model_updates": 20000,
+        "warmup_updates": 100000,
+        "archive_index": 42
+      },
+      "metrics": {
+        "successes": 1,
+        "collision_episodes": 2,
+        "arrivals_without_recorded_violations": 0,
+        "monitored_violation_fields": [
+          "collision",
+          "red_light",
+          "stop_sign",
+          "illegal_lane",
+          "offroad",
+          "wrong_way",
+          "unsafe_child",
+          "unsafe_weather"
+        ],
+        "red_light_violations": 0,
+        "red_light_episodes": 0,
+        "red_light_episode_rate": 0.0,
+        "success_rate": 0.1,
+        "collision_episode_rate": 0.2,
+        "mean_return": 467.1664764404297,
+        "mean_route_completion": 0.5751413820435282,
+        "completed_episodes": 10,
+        "planned_episodes": 10,
+        "complete": true,
+        "per_weather": {
+          "ClearNoon": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.0,
+            "mean_return": 517.0530395507812,
+            "mean_route_completion": 0.5237963323058001
+          },
+          "HardRainNoon": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.0,
+            "mean_return": 629.9814453125,
+            "mean_route_completion": 0.8026035452324947
+          },
+          "ClearNight": {
+            "episodes": 2,
+            "successes": 1,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.5,
+            "collision_episode_rate": 0.0,
+            "mean_return": 633.8099670410156,
+            "mean_route_completion": 0.8181184096958485
+          },
+          "HardRainNight": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 1,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.5,
+            "mean_return": 257.1841125488281,
+            "mean_route_completion": 0.32992058502985044
+          },
+          "FogNight": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 1,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.5,
+            "mean_return": 297.80381774902344,
+            "mean_route_completion": 0.401268037953647
+          }
+        },
+        "prototype_acceptance": {
+          "eligible": false,
+          "required_success_rate": 0.8,
+          "maximum_collision_episode_rate": 0.1,
+          "passed": false
+        }
+      },
+      "report": "runs/town01_experiment_001/development/candidate_000042.json"
+    },
+    {
+      "candidate": {
+        "path": "runs/town01_experiment_001/checkpoints/agent_000054_sac.pt",
+        "source": "runs/town01_experiment_001/agent.pt",
+        "stage": "sac",
+        "saved_unix": 1792251759.9547951,
+        "sha256": "7e2a5a6e9f55c08e9971b75c026ee4756afe6235e20cf31b93903520c537ff57",
+        "deadline_reached": false,
+        "policy_updates": 613332,
+        "model_updates": 20000,
+        "warmup_updates": 100000,
+        "archive_index": 54
+      },
+      "metrics": {
+        "successes": 1,
+        "collision_episodes": 2,
+        "arrivals_without_recorded_violations": 0,
+        "monitored_violation_fields": [
+          "collision",
+          "red_light",
+          "stop_sign",
+          "illegal_lane",
+          "offroad",
+          "wrong_way",
+          "unsafe_child",
+          "unsafe_weather"
+        ],
+        "red_light_violations": 0,
+        "red_light_episodes": 0,
+        "red_light_episode_rate": 0.0,
+        "success_rate": 0.1,
+        "collision_episode_rate": 0.2,
+        "mean_return": 452.756819152832,
+        "mean_route_completion": 0.5582667107530137,
+        "completed_episodes": 10,
+        "planned_episodes": 10,
+        "complete": true,
+        "per_weather": {
+          "ClearNoon": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.0,
+            "mean_return": 444.2041320800781,
+            "mean_route_completion": 0.4368181505919121
+          },
+          "HardRainNoon": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.0,
+            "mean_return": 632.3138427734375,
+            "mean_route_completion": 0.8056132918146741
+          },
+          "ClearNight": {
+            "episodes": 2,
+            "successes": 1,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.5,
+            "collision_episode_rate": 0.0,
+            "mean_return": 633.9288635253906,
+            "mean_route_completion": 0.8183020367954739
+          },
+          "HardRainNight": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 1,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.5,
+            "mean_return": 256.4725570678711,
+            "mean_route_completion": 0.3302106030363434
+          },
+          "FogNight": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 1,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.5,
+            "mean_return": 296.8647003173828,
+            "mean_route_completion": 0.4003894715266647
+          }
+        },
+        "prototype_acceptance": {
+          "eligible": false,
+          "required_success_rate": 0.8,
+          "maximum_collision_episode_rate": 0.1,
+          "passed": false
+        }
+      },
+      "report": "runs/town01_experiment_001/development/candidate_000054.json"
+    },
+    {
+      "candidate": {
+        "path": "runs/town01_experiment_001/checkpoints/agent_000069_deadline.pt",
+        "source": "runs/town01_experiment_001/agent.pt",
+        "stage": "deadline",
+        "saved_unix": 1792255630.71932,
+        "sha256": "26e613cce0861cea5a81d06848d1785980f46cfe667f89a50e94f6fae0f8023c",
+        "deadline_reached": true,
+        "policy_updates": 841645,
+        "model_updates": 20000,
+        "warmup_updates": 100000,
+        "archive_index": 69
+      },
+      "metrics": {
+        "successes": 1,
+        "collision_episodes": 1,
+        "arrivals_without_recorded_violations": 0,
+        "monitored_violation_fields": [
+          "collision",
+          "red_light",
+          "stop_sign",
+          "illegal_lane",
+          "offroad",
+          "wrong_way",
+          "unsafe_child",
+          "unsafe_weather"
+        ],
+        "red_light_violations": 0,
+        "red_light_episodes": 0,
+        "red_light_episode_rate": 0.0,
+        "success_rate": 0.1,
+        "collision_episode_rate": 0.1,
+        "mean_return": 475.91063385009767,
+        "mean_route_completion": 0.5739164291901067,
+        "completed_episodes": 10,
+        "planned_episodes": 10,
+        "complete": true,
+        "per_weather": {
+          "ClearNoon": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.0,
+            "mean_return": 518.9654998779297,
+            "mean_route_completion": 0.5256099271843402
+          },
+          "HardRainNoon": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.0,
+            "mean_return": 631.5677795410156,
+            "mean_route_completion": 0.8037679553612667
+          },
+          "ClearNight": {
+            "episodes": 2,
+            "successes": 1,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.5,
+            "collision_episode_rate": 0.0,
+            "mean_return": 634.3070373535156,
+            "mean_route_completion": 0.8185712884623968
+          },
+          "HardRainNight": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 1,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.5,
+            "mean_return": 256.7932472229004,
+            "mean_route_completion": 0.3300626857492759
+          },
+          "FogNight": {
+            "episodes": 2,
+            "successes": 0,
+            "collision_episodes": 0,
+            "arrivals_without_recorded_violations": 0,
+            "monitored_violation_fields": [
+              "collision",
+              "red_light",
+              "stop_sign",
+              "illegal_lane",
+              "offroad",
+              "wrong_way",
+              "unsafe_child",
+              "unsafe_weather"
+            ],
+            "red_light_violations": 0,
+            "red_light_episodes": 0,
+            "red_light_episode_rate": 0.0,
+            "success_rate": 0.0,
+            "collision_episode_rate": 0.0,
+            "mean_return": 337.91960525512695,
+            "mean_route_completion": 0.39157028919325426
+          }
+        },
+        "prototype_acceptance": {
+          "eligible": false,
+          "required_success_rate": 0.8,
+          "maximum_collision_episode_rate": 0.1,
+          "passed": false
+        }
+      },
+      "report": "runs/town01_experiment_001/development/candidate_000069.json"
+    }
+  ],
+  "selected": {
+    "candidate": {
+      "path": "runs/town01_experiment_001/checkpoints/agent_000030_first_sac.pt",
+      "source": "runs/town01_experiment_001/agent.pt",
+      "stage": "first_sac",
+      "saved_unix": 1792243962.4305797,
+      "sha256": "16b218595c3b75d93cec7491a2c1a5b35c9c4404646fb381d562ca52a5014490",
+      "deadline_reached": false,
+      "policy_updates": 1,
+      "model_updates": 20000,
+      "warmup_updates": 100000,
+      "archive_index": 30
+    },
+    "metrics": {
+      "successes": 1,
+      "collision_episodes": 1,
+      "arrivals_without_recorded_violations": 0,
+      "monitored_violation_fields": [
+        "collision",
+        "red_light",
+        "stop_sign",
+        "illegal_lane",
+        "offroad",
+        "wrong_way",
+        "unsafe_child",
+        "unsafe_weather"
+      ],
+      "red_light_violations": 0,
+      "red_light_episodes": 0,
+      "red_light_episode_rate": 0.0,
+      "success_rate": 0.1,
+      "collision_episode_rate": 0.1,
+      "mean_return": 533.8193050384522,
+      "mean_route_completion": 0.62825469227058,
+      "completed_episodes": 10,
+      "planned_episodes": 10,
+      "complete": true,
+      "per_weather": {
+        "ClearNoon": {
+          "episodes": 2,
+          "successes": 0,
+          "collision_episodes": 0,
+          "arrivals_without_recorded_violations": 0,
+          "monitored_violation_fields": [
+            "collision",
+            "red_light",
+            "stop_sign",
+            "illegal_lane",
+            "offroad",
+            "wrong_way",
+            "unsafe_child",
+            "unsafe_weather"
+          ],
+          "red_light_violations": 0,
+          "red_light_episodes": 0,
+          "red_light_episode_rate": 0.0,
+          "success_rate": 0.0,
+          "collision_episode_rate": 0.0,
+          "mean_return": 512.0259246826172,
+          "mean_route_completion": 0.5199977669332798
+        },
+        "HardRainNoon": {
+          "episodes": 2,
+          "successes": 0,
+          "collision_episodes": 0,
+          "arrivals_without_recorded_violations": 0,
+          "monitored_violation_fields": [
+            "collision",
+            "red_light",
+            "stop_sign",
+            "illegal_lane",
+            "offroad",
+            "wrong_way",
+            "unsafe_child",
+            "unsafe_weather"
+          ],
+          "red_light_violations": 0,
+          "red_light_episodes": 0,
+          "red_light_episode_rate": 0.0,
+          "success_rate": 0.0,
+          "collision_episode_rate": 0.0,
+          "mean_return": 569.3634033203125,
+          "mean_route_completion": 0.7276057171600672
+        },
+        "ClearNight": {
+          "episodes": 2,
+          "successes": 1,
+          "collision_episodes": 0,
+          "arrivals_without_recorded_violations": 0,
+          "monitored_violation_fields": [
+            "collision",
+            "red_light",
+            "stop_sign",
+            "illegal_lane",
+            "offroad",
+            "wrong_way",
+            "unsafe_child",
+            "unsafe_weather"
+          ],
+          "red_light_violations": 0,
+          "red_light_episodes": 0,
+          "red_light_episode_rate": 0.0,
+          "success_rate": 0.5,
+          "collision_episode_rate": 0.0,
+          "mean_return": 628.7091674804688,
+          "mean_route_completion": 0.8154216504030594
+        },
+        "HardRainNight": {
+          "episodes": 2,
+          "successes": 0,
+          "collision_episodes": 0,
+          "arrivals_without_recorded_violations": 0,
+          "monitored_violation_fields": [
+            "collision",
+            "red_light",
+            "stop_sign",
+            "illegal_lane",
+            "offroad",
+            "wrong_way",
+            "unsafe_child",
+            "unsafe_weather"
+          ],
+          "red_light_violations": 0,
+          "red_light_episodes": 0,
+          "red_light_episode_rate": 0.0,
+          "success_rate": 0.0,
+          "collision_episode_rate": 0.0,
+          "mean_return": 656.7745361328125,
+          "mean_route_completion": 0.6711846033579287
+        },
+        "FogNight": {
+          "episodes": 2,
+          "successes": 0,
+          "collision_episodes": 1,
+          "arrivals_without_recorded_violations": 0,
+          "monitored_violation_fields": [
+            "collision",
+            "red_light",
+            "stop_sign",
+            "illegal_lane",
+            "offroad",
+            "wrong_way",
+            "unsafe_child",
+            "unsafe_weather"
+          ],
+          "red_light_violations": 0,
+          "red_light_episodes": 0,
+          "red_light_episode_rate": 0.0,
+          "success_rate": 0.0,
+          "collision_episode_rate": 0.5,
+          "mean_return": 302.2234935760498,
+          "mean_route_completion": 0.407063723498565
+        }
+      },
+      "prototype_acceptance": {
+        "eligible": false,
+        "required_success_rate": 0.8,
+        "maximum_collision_episode_rate": 0.1,
+        "passed": false
+      }
+    },
+    "report": "runs/town01_experiment_001/development/candidate_000030.json"
+  },
+  "selected_agent_sha256": "16b218595c3b75d93cec7491a2c1a5b35c9c4404646fb381d562ca52a5014490",
+  "final_results_used_for_selection": false
+}

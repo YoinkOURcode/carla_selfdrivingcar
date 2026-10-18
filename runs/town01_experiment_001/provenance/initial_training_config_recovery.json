@@ -1,0 +1,8 @@
+{
+  "source_checkpoint": "runs/town01_experiment_001/factorized_termination/source_world_model.pt",
+  "source_config_field": "config",
+  "recovered_file": "runs/town01_experiment_001/provenance/initial_training_config.json",
+  "sha256": "787a701d9f60b670939f3fdb371bc8e8bbf226ec4ee9972bb484aa154b7338f5",
+  "matches_original_pretraining_config_hash": true,
+  "unknown_fields_in_original_Config": []
+}

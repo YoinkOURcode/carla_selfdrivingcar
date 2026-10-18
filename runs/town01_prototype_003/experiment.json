@@ -1,0 +1,52 @@
+{
+  "status": "not_run",
+  "created_utc": "2026-10-17T03:04:45.856860+00:00",
+  "source_data": "runs/town01_training_data_001",
+  "source_model": "runs/town01_prototype_001/world_model.pt",
+  "policy_initialization": "Fresh actor, critics and optimizers; training-only expert/DAgger warm-up. No old SAC weights.",
+  "planned_actor_warmup_updates": 50000,
+  "planned_sac_updates": 2000,
+  "planned_data_frontier": 124,
+  "method": "Same structured-observation skip and expert-anchored SAC as experiment002; add the independently seeded expert-labelled policy states from the fixed collection001 batch. Frozen world-model/normalizer and unchanged gates.",
+  "final_evaluation_plan": "Same untouched fixed 50 scenarios; ten per weather.",
+  "commands": [
+    [
+      "venv/bin/python",
+      "-m",
+      "world_model_rl",
+      "train",
+      "--config",
+      "runs/town01_prototype_003/config.json",
+      "--data",
+      "runs/town01_training_data_001",
+      "--model",
+      "runs/town01_prototype_001/world_model.pt",
+      "--output",
+      "runs/town01_prototype_003",
+      "--policy-updates",
+      "2000"
+    ]
+  ],
+  "rendering": "Disabled for ground-truth structured-state throughput only. Physics, observations, rewards, weather and gates unchanged; original viewport settings restored after the session.",
+  "rendering_compatibility_evidence": "Docs/adv_rendering_options.md no-rendering section; CarlaEngine.cpp OnEpisodeSettingsChanged sets only GameViewport.bDisableWorldRendering for this flag.",
+  "source_files": {
+    "__init__.py": "5b52c39b87987e3fabe28f4d1f9103511867993b8d068ff63f9f084b9b8d2a78",
+    "config.py": "4e10c7580338f43e31c7d8046bc763f1313057a5a376ef48bf535a51d141b013",
+    "schema.py": "9166a5bdc0bb8e0ac11ec393b2da6f6a4ff12f0be287fd54121c6b0696b63ac4",
+    "control.py": "97ec42096093899eb845304158ac44728a083e4892f1400d44225cb7c2e81874",
+    "geometry.py": "24480616f843179cb439fa4ab343a017737b28fd76dad5ffc309f48ef715cb5f",
+    "data.py": "c135694dcf73d7e93261f976c4534625f30be2340eac8f562709145ea1ac88a7",
+    "model.py": "b2e2fc30fe979b33a8adbe2b35b2fe98a9db82b702293ffa2b7152e28b742fc6",
+    "sac.py": "b876caaf5806d2249ceea540f533b251cba4cabf21f47792de2b91adbb0379ca",
+    "observations.py": "6343add036163c91f2b2a2bd5cdd9f5fdfbdeeb5b888721fc78292d8569f249e",
+    "rewards.py": "62b98072493c631b62af2051bfb481714c787fbd3da318fd00406b345955337e",
+    "environment.py": "6f0f8f60bd63648a19e880884286f8c61a4149199113c7dccce6178dcc3c91e1",
+    "training.py": "9f9437dea2b9c586b2d5a3ed3bb10e384da59b6dcf5726f138a282395aa99714",
+    "runner.py": "4873138b12b5e15d4f532fa4a59de4ddce49626b5b443cff1b5d9609a27b3b9b",
+    "__main__.py": "2f9a1d71c5768a8a2f92240f82280a81d0c1200a44da569de5f308810c411b0b",
+    "viewer.py": "d04e7e25fd5e1256af68b80a64b40f7d60ed81bb6c129fc8384be891fb7fde9c",
+    "evaluation.py": "5ec13879dbe453de281359cb58af4eea0dbac335a830561f88c02dcfa6ddeb60",
+    "policy.py": "7f5398ec606f722a34767423d922467ee6c532af3b7366f7073d45b8125a7d59"
+  },
+  "reason": "The fixed data batch exposed repeated late-braking expert labels. Prioritize geometric counterfactual labels rather than another recorded-label-only actor. No weights were trained in this directory."
+}

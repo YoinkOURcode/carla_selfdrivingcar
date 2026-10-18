@@ -1,0 +1,79 @@
+{
+  "status": "rejected_on_development",
+  "created_utc": "2026-10-17T03:22:00.730715+00:00",
+  "source_data": "runs/manual/data",
+  "source_model": "runs/town01_prototype_001/world_model.pt",
+  "method": "Fresh SAC with geometry_v2 counterfactual labels, actual Tesla steering geometry, structured observation skip and frozen attention/RSSM; 25% synthetic replay. Pure network control at evaluation time.",
+  "calibration": "Captured active Tesla physics: ~3.0046m wheelbase, 70deg front steering and a speed-dependent curve in km/h. geometry_v1 used an approximate .7rad denominator and is not prioritized for driving evaluation.",
+  "source_files": {
+    "__init__.py": "5b52c39b87987e3fabe28f4d1f9103511867993b8d068ff63f9f084b9b8d2a78",
+    "config.py": "f72f06f8617443295d8a98293e344563316c567ec8c114ec4dc8fa3c751f9fe6",
+    "schema.py": "9166a5bdc0bb8e0ac11ec393b2da6f6a4ff12f0be287fd54121c6b0696b63ac4",
+    "control.py": "97ec42096093899eb845304158ac44728a083e4892f1400d44225cb7c2e81874",
+    "geometry.py": "24480616f843179cb439fa4ab343a017737b28fd76dad5ffc309f48ef715cb5f",
+    "data.py": "c135694dcf73d7e93261f976c4534625f30be2340eac8f562709145ea1ac88a7",
+    "model.py": "b2e2fc30fe979b33a8adbe2b35b2fe98a9db82b702293ffa2b7152e28b742fc6",
+    "sac.py": "5528567eaa729077e579217b9dd66a41ba9f6b946cf040e17fd196c470cc9451",
+    "observations.py": "6343add036163c91f2b2a2bd5cdd9f5fdfbdeeb5b888721fc78292d8569f249e",
+    "rewards.py": "62b98072493c631b62af2051bfb481714c787fbd3da318fd00406b345955337e",
+    "environment.py": "6f0f8f60bd63648a19e880884286f8c61a4149199113c7dccce6178dcc3c91e1",
+    "training.py": "9f9437dea2b9c586b2d5a3ed3bb10e384da59b6dcf5726f138a282395aa99714",
+    "runner.py": "18ab0531a0957a5a154eb8815952fa04bd15ff231d842742999c00a66bfa684e",
+    "__main__.py": "2f9a1d71c5768a8a2f92240f82280a81d0c1200a44da569de5f308810c411b0b",
+    "viewer.py": "d04e7e25fd5e1256af68b80a64b40f7d60ed81bb6c129fc8384be891fb7fde9c",
+    "evaluation.py": "5ec13879dbe453de281359cb58af4eea0dbac335a830561f88c02dcfa6ddeb60",
+    "policy.py": "7f5398ec606f722a34767423d922467ee6c532af3b7366f7073d45b8125a7d59",
+    "teachers.py": "cea60a72652a2a71508cd5362f41585c769dabc3ce1baed91ac300b37f43e5a6"
+  },
+  "final_plan": "Same untouched 50 scenarios fixed before experiment001.",
+  "commands": [
+    [
+      "venv/bin/python",
+      "-m",
+      "world_model_rl",
+      "train",
+      "--config",
+      "runs/town01_prototype_005/config.json",
+      "--data",
+      "runs/manual/data",
+      "--model",
+      "runs/town01_prototype_001/world_model.pt",
+      "--output",
+      "runs/town01_prototype_005",
+      "--policy-updates",
+      "2000"
+    ],
+    [
+      "venv/bin/python",
+      "-m",
+      "world_model_rl",
+      "evaluate",
+      "--config",
+      "runs/town01_prototype_005/config.json",
+      "--checkpoint",
+      "runs/town01_prototype_005/agent.pt",
+      "--plan",
+      "runs/town01_prototype_005/development_plan.json",
+      "--output",
+      "runs/town01_prototype_005/development_evaluation.json"
+    ]
+  ],
+  "live_tool_session": null,
+  "tests": "78 passed",
+  "policy_training": {
+    "teacher": "geometry_v2",
+    "actor_warmup_updates": 50000,
+    "sac_updates": 2000
+  },
+  "source_model_sha256": "ef3f9b1e7d86e05abb09ece2e4b23a99995ddaa4cab350fdb6e044579ad3edca",
+  "development": {
+    "complete": true,
+    "completed_episodes": 10,
+    "successes": 3,
+    "collision_episodes": 6,
+    "success_rate": 0.3,
+    "collision_episode_rate": 0.6,
+    "mean_route_completion": 0.5206201236983263
+  },
+  "teacher_issue": "geometry_v2 cruise feed-forward can creep at zero desired speed. New geometry_v3 corrects labels; this artifact remains unchanged."
+}

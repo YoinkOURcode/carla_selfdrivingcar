@@ -1,0 +1,51 @@
+{
+  "updated_utc": "2026-10-17T18:24:52.919242+00:00",
+  "stage": "evaluation_complete_targets_unmet",
+  "deadline_guard_pid": null,
+  "tool_sessions": {
+    "fit": 45599,
+    "pipeline": 27334,
+    "deadline_guard": 36684,
+    "observation_readout": 10386,
+    "pipeline_after_factorized": 35990,
+    "resumed_gpu_training": 86888,
+    "resumed_gpu_supervisor": 59544,
+    "resumed_deadline_guard": 88128
+  },
+  "started_unix": 1792237630.635958,
+  "deadline_unix": 1792255630.635958,
+  "collection_complete": true,
+  "dataset_episodes": 295,
+  "normalizer_audit": "normalizer_and_fresh_initialization_audit.json",
+  "active_tool_session": null,
+  "device": "cuda",
+  "policy_training_started": true,
+  "completed_processes": {
+    "fit_pid": 644202,
+    "pipeline_pid": 645398,
+    "fit_tool_exit": 0,
+    "pipeline_tool_exit": 1,
+    "resumed_gpu_training_pid": 12395,
+    "resumed_gpu_training_exit": 0,
+    "resumed_guard_pid": 12391,
+    "resumed_guard_exit": 0,
+    "evaluation_pid": 17907,
+    "supervisor_pid": 12855,
+    "evaluation_supervisor_exit": 0
+  },
+  "last_readout_exit": 2,
+  "pipeline_pid": 12855,
+  "training_pid": null,
+  "historical_sessions_no_longer_active": [
+    35990,
+    36684,
+    3291,
+    90477
+  ],
+  "training_stopped": true,
+  "final_sac_updates": 841645,
+  "evaluation_pid": null,
+  "acceptance_passed": false,
+  "selected_sac_updates": 1,
+  "final_episodes": 50
+}

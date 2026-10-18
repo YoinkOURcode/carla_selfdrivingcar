@@ -1,0 +1,13 @@
+{
+  "actor_active_distance": 2000.0,
+  "deterministic_ragdolls": true,
+  "fixed_delta_seconds": null,
+  "max_culling_distance": 0.0,
+  "max_substep_delta_time": 0.01,
+  "max_substeps": 10,
+  "no_rendering_mode": false,
+  "spectator_as_ego": true,
+  "substepping": true,
+  "synchronous_mode": false,
+  "tile_stream_distance": 3000.0
+}

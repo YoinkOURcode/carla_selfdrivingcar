@@ -1,0 +1,18 @@
+{
+  "created_utc": "2026-10-17T12:20:01.608595+00:00",
+  "change": "Preserve event multiplicities in evaluation totals, separately from decisions/episodes containing events",
+  "training_function_asts_unchanged": true,
+  "training_functions": {
+    "fit": "e65b18209b362427b65794dc8c3381ad9edccc4be36afcde7f49fed719d2567d",
+    "fit_termination": "e65205a55c203919317f03f53b745a2834cf23e453dc2f2dd942fd0f0ca9b2bb",
+    "train": "50ac8db27443de3ba9932dc4b4c4427b51f06c384247df068dd1e79975b36fb3"
+  },
+  "source_files": {
+    "world_model_rl/runner.py": "643439503ebfd886e7f477e2166fa6b435ec97db1a239ecc3ac4c67377983629",
+    "world_model_rl/evaluation.py": "5fed371e35ae2ec3748258b6a7f856b894cb1e0d2122ff665c6eeaaf9a600da6",
+    "world_model_rl/tests/test_evaluation.py": "c782ebfb3aa77deea521f5833542b187eebc1e21b2ee99f859f76de4543d389d"
+  },
+  "existing_running_fit": "continues its loaded pre-fix source; exact snapshot retained",
+  "future_policy_optimization": "same function AST and settings; no restart",
+  "evaluation_data_used_for_change": false
+}

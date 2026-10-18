@@ -1,0 +1,30 @@
+{
+  "format": 1,
+  "created_utc": "2026-10-17T11:28:06.759779+00:00",
+  "training_seconds": 18000,
+  "checkpoint_seconds": 300,
+  "clock_origin": "first valid model-fitting stage after fixed collection",
+  "candidate_schedule_seconds": [
+    3600,
+    7200,
+    10800,
+    14400,
+    18000
+  ],
+  "additional_candidate": "completed actor warm-up checkpoint",
+  "candidate_rule": "Completed warm-up plus unique last learned agent archive at/before each hourly cutoff; the last cutoff uses the actual final deadline snapshot saved at a safe optimizer boundary. No result-dependent candidate schedule.",
+  "development_plan_sha256": "a09f24b3107e7e1931e611909ccc9d42f1cb3c22c753cf44081e375fdc9fad81",
+  "ranking_descending": [
+    "arrivals_without_recorded_violations",
+    "successes",
+    "negative_collision_episodes",
+    "negative_red_light_violations",
+    "mean_route_completion",
+    "negative_archive_index"
+  ],
+  "require_complete_development_plan": true,
+  "final_plan_sha256": "f8394b8ab3cfdec2c6418de7aabc190c4d9909a429270c3f3aab0e15e23fc838",
+  "final_evaluation_usage": "evaluation_only_never_train_or_select",
+  "policy_runtime": "deterministic neural SAC actor and shared action adapter only",
+  "last_cutoff_uses_final_deadline_snapshot": true
+}

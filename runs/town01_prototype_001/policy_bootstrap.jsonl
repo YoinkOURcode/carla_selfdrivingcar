@@ -1,0 +1,10 @@
+{"update": 1000, "loss": 0.011459335684776306, "seconds": 3.104535997000312, "device": "cuda"}
+{"update": 2000, "loss": 0.013551990501582623, "seconds": 6.105910883999968, "device": "cuda"}
+{"update": 3000, "loss": 0.012500335462391376, "seconds": 9.126700917000107, "device": "cuda"}
+{"update": 4000, "loss": 0.012795200571417809, "seconds": 11.978455335000035, "device": "cuda"}
+{"update": 5000, "loss": 0.011898959055542946, "seconds": 14.845383936999951, "device": "cuda"}
+{"update": 6000, "loss": 0.010433471761643887, "seconds": 17.918549992999942, "device": "cuda"}
+{"update": 7000, "loss": 0.01144780870527029, "seconds": 20.906334990000232, "device": "cuda"}
+{"update": 8000, "loss": 0.008166447281837463, "seconds": 23.93223280300026, "device": "cuda"}
+{"update": 9000, "loss": 0.009443551301956177, "seconds": 26.91404054900022, "device": "cuda"}
+{"update": 10000, "loss": 0.006549362558871508, "seconds": 29.964236128000266, "device": "cuda"}

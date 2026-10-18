@@ -1,0 +1,11 @@
+{
+  "checked_utc": "2026-10-17T16:42:35.087035+00:00",
+  "remaining_seconds": 275.5489103794098,
+  "deadline_unix": 1792255630.635958,
+  "map": "Carla/Maps/Town01",
+  "synchronous_mode": false,
+  "vehicles": [],
+  "read_only_no_tick_spawn_or_settings_change": true,
+  "changed_python_files": [],
+  "evaluation_reports_present": []
+}

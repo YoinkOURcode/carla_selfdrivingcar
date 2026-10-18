@@ -1,0 +1,377 @@
+{
+  "purpose": "Read-only action generalization audit. No gradients, optimization, checkpoint writes, or CARLA control.",
+  "teacher": "geometry_v3",
+  "splits": {
+    "train": {
+      "episode_ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        6,
+        7,
+        9,
+        11,
+        12,
+        13,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        23,
+        24,
+        26,
+        27,
+        28,
+        29,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        40,
+        41,
+        42,
+        44,
+        45,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        56,
+        57,
+        58,
+        60,
+        61,
+        62,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        77,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        87,
+        88,
+        90,
+        92,
+        93,
+        94,
+        95,
+        96,
+        97,
+        99,
+        100,
+        102,
+        103,
+        104,
+        106,
+        107,
+        108,
+        109,
+        110,
+        111,
+        113,
+        114,
+        115,
+        116,
+        118,
+        119,
+        120,
+        121,
+        122,
+        123
+      ],
+      "transitions": 95002,
+      "actors": {
+        "007": {
+          "slot_permutation": {
+            "sampled_states": 9501,
+            "mean_absolute_action_change": [
+              0.003645043121650815,
+              0.23100662231445312,
+              0.13938933610916138
+            ],
+            "braking_decision_changed_fraction": 0.32996526681401955
+          },
+          "all": {
+            "count": 95002,
+            "mean_absolute_action_error": [
+              0.005145297851413488,
+              0.017078595235943794,
+              0.021216923370957375
+            ],
+            "net_braking_fraction": 0.41541230710932403,
+            "net_throttle_fraction": 0.45868508031409866
+          },
+          "moving_red_braking": {
+            "count": 3368,
+            "mean_absolute_action_error": [
+              0.004154698923230171,
+              0.012657689861953259,
+              0.037201572209596634
+            ],
+            "net_braking_fraction": 0.8999406175771971,
+            "net_throttle_fraction": 0.0
+          },
+          "stationary_red_braking": {
+            "count": 15840,
+            "mean_absolute_action_error": [
+              0.0023974126670509577,
+              0.005393107887357473,
+              0.01854459010064602
+            ],
+            "net_braking_fraction": 1.0,
+            "net_throttle_fraction": 0.0
+          },
+          "teacher_accelerating": {
+            "count": 34236,
+            "mean_absolute_action_error": [
+              0.006206438411027193,
+              0.0235456433147192,
+              0.011836705729365349
+            ],
+            "net_braking_fraction": 0.005316041593644117,
+            "net_throttle_fraction": 0.9786774155859329
+          },
+          "turns": {
+            "count": 6373,
+            "mean_absolute_action_error": [
+              0.0065265195444226265,
+              0.016917245462536812,
+              0.011500914581120014
+            ],
+            "net_braking_fraction": 0.24368429311156442,
+            "net_throttle_fraction": 0.7167738898477953
+          }
+        },
+        "008": {
+          "slot_permutation": {
+            "sampled_states": 9501,
+            "mean_absolute_action_change": [
+              0.0044288188219070435,
+              0.22693340480327606,
+              0.12871521711349487
+            ],
+            "braking_decision_changed_fraction": 0.3257551836648774
+          },
+          "all": {
+            "count": 95002,
+            "mean_absolute_action_error": [
+              0.006425757892429829,
+              0.019781237468123436,
+              0.02388933300971985
+            ],
+            "net_braking_fraction": 0.4089808635607671,
+            "net_throttle_fraction": 0.4516641754910423
+          },
+          "moving_red_braking": {
+            "count": 3368,
+            "mean_absolute_action_error": [
+              0.002185542369261384,
+              0.0042610629461705685,
+              0.022392988204956055
+            ],
+            "net_braking_fraction": 0.9382422802850356,
+            "net_throttle_fraction": 0.0
+          },
+          "stationary_red_braking": {
+            "count": 15840,
+            "mean_absolute_action_error": [
+              0.0018614238360896707,
+              0.007174661848694086,
+              0.01644035242497921
+            ],
+            "net_braking_fraction": 1.0,
+            "net_throttle_fraction": 0.0
+          },
+          "teacher_accelerating": {
+            "count": 34236,
+            "mean_absolute_action_error": [
+              0.007648174185305834,
+              0.027327604591846466,
+              0.014178627170622349
+            ],
+            "net_braking_fraction": 0.007214627877088445,
+            "net_throttle_fraction": 0.9709662343731744
+          },
+          "turns": {
+            "count": 6373,
+            "mean_absolute_action_error": [
+              0.005392959341406822,
+              0.012248173356056213,
+              0.013070246204733849
+            ],
+            "net_braking_fraction": 0.24478267691824887,
+            "net_throttle_fraction": 0.7093990271457712
+          }
+        }
+      }
+    },
+    "validation": {
+      "episode_ids": [
+        8,
+        14,
+        22,
+        30,
+        43,
+        59,
+        63,
+        76,
+        86,
+        91,
+        105,
+        112
+      ],
+      "transitions": 14780,
+      "actors": {
+        "007": {
+          "slot_permutation": {
+            "sampled_states": 1478,
+            "mean_absolute_action_change": [
+              0.0034051344264298677,
+              0.26964902877807617,
+              0.14723333716392517
+            ],
+            "braking_decision_changed_fraction": 0.37686062246278756
+          },
+          "all": {
+            "count": 14780,
+            "mean_absolute_action_error": [
+              0.005646540783345699,
+              0.06913422048091888,
+              0.06281612068414688
+            ],
+            "net_braking_fraction": 0.4426928281461434,
+            "net_throttle_fraction": 0.40108254397834914
+          },
+          "moving_red_braking": {
+            "count": 445,
+            "mean_absolute_action_error": [
+              0.00358381774276495,
+              0.047755852341651917,
+              0.14736802875995636
+            ],
+            "net_braking_fraction": 0.7775280898876404,
+            "net_throttle_fraction": 0.04943820224719101
+          },
+          "stationary_red_braking": {
+            "count": 2279,
+            "mean_absolute_action_error": [
+              0.0029002437368035316,
+              0.031661029905080795,
+              0.06361115723848343
+            ],
+            "net_braking_fraction": 0.9530495831505046,
+            "net_throttle_fraction": 0.009214567792891619
+          },
+          "teacher_accelerating": {
+            "count": 5574,
+            "mean_absolute_action_error": [
+              0.0060788835398852825,
+              0.134241983294487,
+              0.058384813368320465
+            ],
+            "net_braking_fraction": 0.130426982418371,
+            "net_throttle_fraction": 0.7997847147470398
+          },
+          "turns": {
+            "count": 287,
+            "mean_absolute_action_error": [
+              0.011929938569664955,
+              0.014573070220649242,
+              0.07164380699396133
+            ],
+            "net_braking_fraction": 0.7560975609756098,
+            "net_throttle_fraction": 0.06620209059233449
+          }
+        },
+        "008": {
+          "slot_permutation": {
+            "sampled_states": 1478,
+            "mean_absolute_action_change": [
+              0.0043644229881465435,
+              0.27338215708732605,
+              0.13498541712760925
+            ],
+            "braking_decision_changed_fraction": 0.3680649526387009
+          },
+          "all": {
+            "count": 14780,
+            "mean_absolute_action_error": [
+              0.006660299375653267,
+              0.07634221762418747,
+              0.07025015354156494
+            ],
+            "net_braking_fraction": 0.44235453315290935,
+            "net_throttle_fraction": 0.386468200270636
+          },
+          "moving_red_braking": {
+            "count": 445,
+            "mean_absolute_action_error": [
+              0.0031004087068140507,
+              0.0313938744366169,
+              0.15524300932884216
+            ],
+            "net_braking_fraction": 0.8224719101123595,
+            "net_throttle_fraction": 0.0449438202247191
+          },
+          "stationary_red_braking": {
+            "count": 2279,
+            "mean_absolute_action_error": [
+              0.0029030735604465008,
+              0.03641317039728165,
+              0.0760023444890976
+            ],
+            "net_braking_fraction": 0.8964458095655989,
+            "net_throttle_fraction": 0.005265467310223783
+          },
+          "teacher_accelerating": {
+            "count": 5574,
+            "mean_absolute_action_error": [
+              0.006703955586999655,
+              0.14952805638313293,
+              0.06265130639076233
+            ],
+            "net_braking_fraction": 0.15590240401865804,
+            "net_throttle_fraction": 0.7719770362396843
+          },
+          "turns": {
+            "count": 287,
+            "mean_absolute_action_error": [
+              0.014336085878312588,
+              0.013999457471072674,
+              0.07652230560779572
+            ],
+            "net_braking_fraction": 0.7247386759581882,
+            "net_throttle_fraction": 0.04878048780487805
+          }
+        }
+      }
+    }
+  },
+  "reproduction_source": "import json\nimport sys\nfrom pathlib import Path\nsys.path.insert(0, str(Path.cwd()))\nimport numpy as np\nimport torch\nfrom world_model_rl.config import Config\nfrom world_model_rl.data import Dataset\nfrom world_model_rl.training import load_checkpoint\nfrom world_model_rl.sac import SAC, real_replay\nfrom world_model_rl.policy import policy_feature_size\nfrom world_model_rl.teachers import geometry_actions\n\ntorch.set_num_threads(2)\ncfg = Config.load('runs/town01_prototype_008/config.json')\npayload, model, norm, _ = load_checkpoint('runs/town01_prototype_008/agent.pt', cfg, 'cpu')\nactors = {}\nfor run in ['007', '008']:\n    other = torch.load(f'runs/town01_prototype_{run}/agent.pt', map_location='cpu', weights_only=False)\n    sac = SAC(policy_feature_size(model, cfg), cfg, 'cpu')\n    sac.load_state_dict(other['sac'])\n    sac.actor.eval()\n    actors[run] = sac\nreport = {'purpose': 'Read-only action generalization audit. No gradients, optimization, checkpoint writes, or CARLA control.',\n          'teacher': 'geometry_v3', 'splits': {}}\ndataset = Dataset('runs/town01_training_data_001', cfg)\nfor split in ['train', 'validation']:\n    episodes = dataset.load(split)\n    replay = real_replay(episodes, model, norm, 'cpu', payload['model_version'], policy_skip=True)\n    target = np.concatenate([geometry_actions(ep.arrays, True, True) for ep in episodes])\n    continuous = np.concatenate([ep.arrays['continuous'][:-1] for ep in episodes])\n    light = np.concatenate([ep.arrays['light'][:-1] for ep in episodes])\n    controls = np.concatenate([ep.arrays['controls'][:-1] for ep in episodes])\n    stopping = controls[:, 0] & np.isin(light, [2, 3]) & (continuous[:, 14] >= 0) & (continuous[:, 14] < 25) & (target[:, 2] > .1)\n    categories = {'all': np.ones(len(target), bool), 'moving_red_braking': stopping & (continuous[:, 0] > .3),\n                  'stationary_red_braking': stopping & (continuous[:, 0] <= .3),\n                  'teacher_accelerating': target[:, 1] > .2, 'turns': np.abs(target[:, 0]) > .15}\n    result = {'episode_ids': [ep.metadata['episode_id'] for ep in episodes], 'transitions': len(target), 'actors': {}}\n    for name, sac in actors.items():\n        features = replay.arrays['features']\n        predictions = np.concatenate([sac.act(features[i:i + 1024], deterministic=True) for i in range(0, len(features), 1024)])\n        # Reorder interchangeable vehicle slots and pedestrian slots together\n        # with their masks/classes. This changes no physical scene or teacher label.\n        sampled = features[::10].copy()\n        original = predictions[::10]\n        offset = cfg.model.deterministic + cfg.model.stochastic + 4\n        permutation = np.r_[np.arange(5, -1, -1), np.arange(11, 5, -1)]\n        sampled[:, offset + 30:offset + 114] = sampled[:, offset + 30:offset + 114].reshape(-1, 12, 7)[:, permutation].reshape(-1, 84)\n        sampled[:, offset + 114:offset + 126] = sampled[:, offset + 114:offset + 126][:, permutation]\n        sampled[:, offset + 126:offset + 162] = sampled[:, offset + 126:offset + 162].reshape(-1, 12, 3)[:, permutation].reshape(-1, 36)\n        permuted = np.concatenate([sac.act(sampled[i:i + 1024], deterministic=True) for i in range(0, len(sampled), 1024)])\n        result['actors'][name] = {'slot_permutation': {'sampled_states': len(sampled),\n            'mean_absolute_action_change': np.abs(permuted - original).mean(0).tolist(),\n            'braking_decision_changed_fraction': float(np.mean((original[:, 2] - original[:, 1] > .1) != (permuted[:, 2] - permuted[:, 1] > .1)))}}\n        for category, mask in categories.items():\n            pred, truth = predictions[mask], target[mask]\n            result['actors'][name][category] = {'count': int(mask.sum()),\n                'mean_absolute_action_error': np.abs(pred - truth).mean(0).tolist() if mask.any() else None,\n                'net_braking_fraction': float(np.mean(pred[:, 2] - pred[:, 1] > .1)) if mask.any() else None,\n                'net_throttle_fraction': float(np.mean(pred[:, 1] - pred[:, 2] > .1)) if mask.any() else None}\n    report['splits'][split] = result\n    print(split, json.dumps(result['actors']), flush=True)\nout = Path('runs/town01_prototype_008/action_generalization_audit.json')\nreport['reproduction_source'] = Path(__file__).read_text()\nout.write_text(json.dumps(report, indent=2) + '\\n')\nprint(out, flush=True)\n"
+}

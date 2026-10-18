@@ -1,0 +1,256 @@
+{
+  "format": 1,
+  "town": "Town01",
+  "scenarios": [
+    {
+      "episode_id": 0,
+      "seed": 21261016,
+      "weather": "ClearNoon"
+    },
+    {
+      "episode_id": 1,
+      "seed": 21261017,
+      "weather": "HardRainNoon"
+    },
+    {
+      "episode_id": 2,
+      "seed": 21261018,
+      "weather": "ClearNight"
+    },
+    {
+      "episode_id": 3,
+      "seed": 21261019,
+      "weather": "HardRainNight"
+    },
+    {
+      "episode_id": 4,
+      "seed": 21261020,
+      "weather": "FogNight"
+    },
+    {
+      "episode_id": 5,
+      "seed": 21261021,
+      "weather": "ClearNoon"
+    },
+    {
+      "episode_id": 6,
+      "seed": 21261022,
+      "weather": "HardRainNoon"
+    },
+    {
+      "episode_id": 7,
+      "seed": 21261023,
+      "weather": "ClearNight"
+    },
+    {
+      "episode_id": 8,
+      "seed": 21261024,
+      "weather": "HardRainNight"
+    },
+    {
+      "episode_id": 9,
+      "seed": 21261025,
+      "weather": "FogNight"
+    },
+    {
+      "episode_id": 10,
+      "seed": 21261026,
+      "weather": "ClearNoon"
+    },
+    {
+      "episode_id": 11,
+      "seed": 21261027,
+      "weather": "HardRainNoon"
+    },
+    {
+      "episode_id": 12,
+      "seed": 21261028,
+      "weather": "ClearNight"
+    },
+    {
+      "episode_id": 13,
+      "seed": 21261029,
+      "weather": "HardRainNight"
+    },
+    {
+      "episode_id": 14,
+      "seed": 21261030,
+      "weather": "FogNight"
+    },
+    {
+      "episode_id": 15,
+      "seed": 21261031,
+      "weather": "ClearNoon"
+    },
+    {
+      "episode_id": 16,
+      "seed": 21261032,
+      "weather": "HardRainNoon"
+    },
+    {
+      "episode_id": 17,
+      "seed": 21261033,
+      "weather": "ClearNight"
+    },
+    {
+      "episode_id": 18,
+      "seed": 21261034,
+      "weather": "HardRainNight"
+    },
+    {
+      "episode_id": 19,
+      "seed": 21261035,
+      "weather": "FogNight"
+    },
+    {
+      "episode_id": 20,
+      "seed": 21261036,
+      "weather": "ClearNoon"
+    },
+    {
+      "episode_id": 21,
+      "seed": 21261037,
+      "weather": "HardRainNoon"
+    },
+    {
+      "episode_id": 22,
+      "seed": 21261038,
+      "weather": "ClearNight"
+    },
+    {
+      "episode_id": 23,
+      "seed": 21261039,
+      "weather": "HardRainNight"
+    },
+    {
+      "episode_id": 24,
+      "seed": 21261040,
+      "weather": "FogNight"
+    },
+    {
+      "episode_id": 25,
+      "seed": 21261041,
+      "weather": "ClearNoon"
+    },
+    {
+      "episode_id": 26,
+      "seed": 21261042,
+      "weather": "HardRainNoon"
+    },
+    {
+      "episode_id": 27,
+      "seed": 21261043,
+      "weather": "ClearNight"
+    },
+    {
+      "episode_id": 28,
+      "seed": 21261044,
+      "weather": "HardRainNight"
+    },
+    {
+      "episode_id": 29,
+      "seed": 21261045,
+      "weather": "FogNight"
+    },
+    {
+      "episode_id": 30,
+      "seed": 21261046,
+      "weather": "ClearNoon"
+    },
+    {
+      "episode_id": 31,
+      "seed": 21261047,
+      "weather": "HardRainNoon"
+    },
+    {
+      "episode_id": 32,
+      "seed": 21261048,
+      "weather": "ClearNight"
+    },
+    {
+      "episode_id": 33,
+      "seed": 21261049,
+      "weather": "HardRainNight"
+    },
+    {
+      "episode_id": 34,
+      "seed": 21261050,
+      "weather": "FogNight"
+    },
+    {
+      "episode_id": 35,
+      "seed": 21261051,
+      "weather": "ClearNoon"
+    },
+    {
+      "episode_id": 36,
+      "seed": 21261052,
+      "weather": "HardRainNoon"
+    },
+    {
+      "episode_id": 37,
+      "seed": 21261053,
+      "weather": "ClearNight"
+    },
+    {
+      "episode_id": 38,
+      "seed": 21261054,
+      "weather": "HardRainNight"
+    },
+    {
+      "episode_id": 39,
+      "seed": 21261055,
+      "weather": "FogNight"
+    },
+    {
+      "episode_id": 40,
+      "seed": 21261056,
+      "weather": "ClearNoon"
+    },
+    {
+      "episode_id": 41,
+      "seed": 21261057,
+      "weather": "HardRainNoon"
+    },
+    {
+      "episode_id": 42,
+      "seed": 21261058,
+      "weather": "ClearNight"
+    },
+    {
+      "episode_id": 43,
+      "seed": 21261059,
+      "weather": "HardRainNight"
+    },
+    {
+      "episode_id": 44,
+      "seed": 21261060,
+      "weather": "FogNight"
+    },
+    {
+      "episode_id": 45,
+      "seed": 21261061,
+      "weather": "ClearNoon"
+    },
+    {
+      "episode_id": 46,
+      "seed": 21261062,
+      "weather": "HardRainNoon"
+    },
+    {
+      "episode_id": 47,
+      "seed": 21261063,
+      "weather": "ClearNight"
+    },
+    {
+      "episode_id": 48,
+      "seed": 21261064,
+      "weather": "HardRainNight"
+    },
+    {
+      "episode_id": 49,
+      "seed": 21261065,
+      "weather": "FogNight"
+    }
+  ]
+}

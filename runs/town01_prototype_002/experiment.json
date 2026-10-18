@@ -1,0 +1,91 @@
+{
+  "status": "rejected_on_development",
+  "created_utc": "2026-10-17T02:55:53.342597+00:00",
+  "source_data": "runs/manual/data",
+  "source_model": "runs/town01_prototype_001/world_model.pt",
+  "source_model_sha256": "ef3f9b1e7d86e05abb09ece2e4b23a99995ddaa4cab350fdb6e044579ad3edca",
+  "method": "Fresh SAC actor/critics; direct structured observation skip alongside frozen attention/RSSM features. Synthetic skips are predictions, with known applied controls/weather propagated. Training-only expert warm-up and expert-anchored SAC, 25% synthetic replay.",
+  "motivation": "Experiment 001 failed all ten development episodes. Diagnostic showed wrong steering into static.wall despite expert requesting the opposite turn; compressed RSSM features did not sustain recovery.",
+  "source_files": {
+    "__init__.py": "5b52c39b87987e3fabe28f4d1f9103511867993b8d068ff63f9f084b9b8d2a78",
+    "config.py": "da94fb4c6cb99c55ef5c05e5432bda562a53e2b26d1fefb48cc9de7a51d701bf",
+    "schema.py": "9166a5bdc0bb8e0ac11ec393b2da6f6a4ff12f0be287fd54121c6b0696b63ac4",
+    "control.py": "97ec42096093899eb845304158ac44728a083e4892f1400d44225cb7c2e81874",
+    "geometry.py": "24480616f843179cb439fa4ab343a017737b28fd76dad5ffc309f48ef715cb5f",
+    "data.py": "1eee080f328f72526f447a0ec9a735f75beb1a460707f5cdb1bc642783e1284b",
+    "model.py": "b2e2fc30fe979b33a8adbe2b35b2fe98a9db82b702293ffa2b7152e28b742fc6",
+    "sac.py": "c70cff773dda4321c43e5732cdc4fb6a21944f8a72463cbd4f89d297af56fc5d",
+    "observations.py": "6343add036163c91f2b2a2bd5cdd9f5fdfbdeeb5b888721fc78292d8569f249e",
+    "rewards.py": "62b98072493c631b62af2051bfb481714c787fbd3da318fd00406b345955337e",
+    "environment.py": "4a72c5d1f52c32a9efa9e4e5b78c530afcb96f258351caa71b14719d9dd51746",
+    "training.py": "9f9437dea2b9c586b2d5a3ed3bb10e384da59b6dcf5726f138a282395aa99714",
+    "runner.py": "3e8642784486803884c9b7366a169840484d747304026f00b07283053dda406f",
+    "__main__.py": "7beddd967fd2b5ed14695c94f8d0e11ee260173dc6a3575d6a97d81244533f3b",
+    "viewer.py": "d04e7e25fd5e1256af68b80a64b40f7d60ed81bb6c129fc8384be891fb7fde9c",
+    "evaluation.py": "5ec13879dbe453de281359cb58af4eea0dbac335a830561f88c02dcfa6ddeb60",
+    "policy.py": "7f5398ec606f722a34767423d922467ee6c532af3b7366f7073d45b8125a7d59"
+  },
+  "final_plan": "same untouched 50 scenarios fixed before experiment001",
+  "commands": [
+    [
+      "venv/bin/python",
+      "-m",
+      "world_model_rl",
+      "train",
+      "--config",
+      "runs/town01_prototype_002/config.json",
+      "--data",
+      "runs/manual/data",
+      "--model",
+      "runs/town01_prototype_001/world_model.pt",
+      "--output",
+      "runs/town01_prototype_002",
+      "--policy-updates",
+      "100"
+    ],
+    [
+      "venv/bin/python",
+      "-m",
+      "world_model_rl",
+      "evaluate",
+      "--config",
+      "runs/town01_prototype_002/config.json",
+      "--checkpoint",
+      "runs/town01_prototype_002/agent.pt",
+      "--plan",
+      "runs/town01_prototype_002/development_plan.json",
+      "--output",
+      "runs/town01_prototype_002/development_evaluation.json"
+    ]
+  ],
+  "recordings_verified_unchanged": 208,
+  "tests": {
+    "command": "venv/bin/python -m pytest world_model_rl/tests -q",
+    "result": "67 passed"
+  },
+  "policy_training": {
+    "warmup_updates": 50000,
+    "sac_updates": 100,
+    "bootstrap_log": "runs/town01_prototype_002/policy_bootstrap.jsonl",
+    "sac_log": "runs/town01_prototype_002/training.jsonl"
+  },
+  "development_progress": {
+    "complete": false,
+    "completed_episodes": 5,
+    "successes": 1,
+    "collision_episodes": 4,
+    "success_rate": 0.2,
+    "collision_episode_rate": 0.8,
+    "mean_route_completion": 0.5654403884160194
+  },
+  "tests_current": "70 passed",
+  "development": {
+    "complete": true,
+    "completed_episodes": 10,
+    "successes": 2,
+    "collision_episodes": 7,
+    "success_rate": 0.2,
+    "collision_episode_rate": 0.7,
+    "mean_route_completion": 0.535184636490444
+  }
+}

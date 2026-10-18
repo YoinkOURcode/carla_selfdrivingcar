@@ -1,0 +1,17 @@
+{
+  "scale": 0.7800994515419006,
+  "intercept": -0.7225373983383179,
+  "metrics": {
+    "positive_count": 19,
+    "negative_count": 45045,
+    "true_positive": 1,
+    "false_positive": 0,
+    "false_negative": 18,
+    "true_negative": 45045,
+    "threshold": 0.5,
+    "brier": 0.0003870633663609624,
+    "recall": 0.05263157894736842,
+    "precision": 1.0
+  },
+  "updates": 1000
+}

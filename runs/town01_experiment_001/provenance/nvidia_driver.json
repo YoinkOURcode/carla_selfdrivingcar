@@ -1,0 +1,9 @@
+{
+  "observed_utc": "2026-10-17T12:21:30.801917+00:00",
+  "training_gpu_previously_verified": "NVIDIA GeForce RTX 4070 Ti",
+  "training_torch_cuda_previously_verified": "12.6",
+  "driver_files": {
+    "/proc/driver/nvidia/version": "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  615.78.08  Release Build  (dvs-builder@U22-I3-G08-04-6)  Tue Oct  6 04:56:08 UTC 2026\nGCC version:  gcc version 16.2.1 20260819 (Red Hat 16.2.1-2) (GCC) \n",
+    "/sys/module/nvidia/version": "615.78.08\n"
+  }
+}

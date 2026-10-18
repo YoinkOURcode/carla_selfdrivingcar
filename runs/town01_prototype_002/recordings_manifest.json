@@ -1,0 +1,834 @@
+{
+  "runs/manual/data/episode_000000.json": {
+    "bytes": 22439,
+    "sha256": "38ba342f5b22a8296a570eb7ef28033953357e14091edfef563b368ed5fff5f1"
+  },
+  "runs/manual/data/episode_000000.npz": {
+    "bytes": 165453,
+    "sha256": "a072f28c588265d83703775702169036a035f1f52093f5d6ffc1eee4d07bc9a7"
+  },
+  "runs/manual/data/episode_000001.json": {
+    "bytes": 22127,
+    "sha256": "ef9ac3218b06e6c8a190842c4cce2d1d3a0e7d599c3fbbe253bd25776beccbff"
+  },
+  "runs/manual/data/episode_000001.npz": {
+    "bytes": 10378,
+    "sha256": "f48d5d6075f821957e119d050166ceb5fb2e36da5750b9105bc388e8853c9996"
+  },
+  "runs/manual/data/episode_000002.json": {
+    "bytes": 17116,
+    "sha256": "39fcc5d4b3653c4185dffca0b54af237c60b430b5393c63a08bbf0499e1c1170"
+  },
+  "runs/manual/data/episode_000002.npz": {
+    "bytes": 52107,
+    "sha256": "aeb2c0821c0aa804e0a081ee4669fd30a8a2f52d94a38df018c209e2f405a0cf"
+  },
+  "runs/manual/data/episode_000003.json": {
+    "bytes": 23510,
+    "sha256": "109ede1b254bc9ac32114b623e7ea89de920c6056ef46565855b9fd43e40dd3a"
+  },
+  "runs/manual/data/episode_000003.npz": {
+    "bytes": 138656,
+    "sha256": "16528e591c7513580e0c68defc6c2fbc849c8d5265c1efb58249ee196d745795"
+  },
+  "runs/manual/data/episode_000004.json": {
+    "bytes": 19211,
+    "sha256": "beb129d1de3f8b627e90c8c75d7fdcb0e53eb196854cacdc1bef10f7192cb344"
+  },
+  "runs/manual/data/episode_000004.npz": {
+    "bytes": 163607,
+    "sha256": "ccd17103e4062490d59811d61cc625e18adbfeff7fd47e98ae07a5e1fd34d997"
+  },
+  "runs/manual/data/episode_000005.json": {
+    "bytes": 14039,
+    "sha256": "bc9cc573f36173bed229be2d8a9403cd493509d85ff47c9d623f1998c9e64ad7"
+  },
+  "runs/manual/data/episode_000005.npz": {
+    "bytes": 130942,
+    "sha256": "ed0e44e3b57750589c5fb64d7004a192cf676e9b24ad78bbaf750483a40c9c6e"
+  },
+  "runs/manual/data/episode_000006.json": {
+    "bytes": 20273,
+    "sha256": "39a92fa48f5ee7285aa81be880cce3592909e13ce7c9ea6c7446a0229ca1a122"
+  },
+  "runs/manual/data/episode_000006.npz": {
+    "bytes": 154853,
+    "sha256": "bd75b31de7be663b363e257c9737625fc5d9745ae6894d1167a6ae0e91d91e38"
+  },
+  "runs/manual/data/episode_000007.json": {
+    "bytes": 22796,
+    "sha256": "9f7e54cd619d0181fa6f7d1804405583295581b6d7be1d8c20bf256e3f6f1f96"
+  },
+  "runs/manual/data/episode_000007.npz": {
+    "bytes": 203996,
+    "sha256": "be315cac83d225fc43d5f84e2d947ccfcb2a6b14b21317bb5d682cc77c35406e"
+  },
+  "runs/manual/data/episode_000008.json": {
+    "bytes": 22245,
+    "sha256": "0897e1ed8b43c5d716eb0708ee1884d74fd143bce4fe7591f5ecc83f86e6d3b8"
+  },
+  "runs/manual/data/episode_000008.npz": {
+    "bytes": 155920,
+    "sha256": "46e6357103925a48783fdcc76e09e8434d082f971ba3580f30f9b20259a35083"
+  },
+  "runs/manual/data/episode_000009.json": {
+    "bytes": 19389,
+    "sha256": "ad07f5d0165c2eafc0c96c09b7f81f08a4718a7db694bbc698006265f5933f11"
+  },
+  "runs/manual/data/episode_000009.npz": {
+    "bytes": 176517,
+    "sha256": "77dd0f3f9aa41d9d65f078e408b6f825e7e39a0a6954d1f1b49f5b8bf6e95b29"
+  },
+  "runs/manual/data/episode_000010.json": {
+    "bytes": 17121,
+    "sha256": "c6e0e63d3decb7265e7f7e8b056563e3791ee5614b1b83b400c773cc8032303e"
+  },
+  "runs/manual/data/episode_000010.npz": {
+    "bytes": 119384,
+    "sha256": "c123ddea55092d563a9f9831ad80e3d855503e4c889a0d95b1f4098d07b1b5ac"
+  },
+  "runs/manual/data/episode_000011.json": {
+    "bytes": 16851,
+    "sha256": "95b4b31168f3c067a8c80b9673ad89a111d50cc10380349b6766d790126f4d0f"
+  },
+  "runs/manual/data/episode_000011.npz": {
+    "bytes": 197031,
+    "sha256": "7102f4218bd40ced8b0a0c7dbe57d1e99a11776fa71f077383b4a2bd50d2ecee"
+  },
+  "runs/manual/data/episode_000012.json": {
+    "bytes": 14188,
+    "sha256": "6f49a0d3728e37906a5f869232687d08c985d59f87d60ed0f5b0768ac7d00f41"
+  },
+  "runs/manual/data/episode_000012.npz": {
+    "bytes": 125569,
+    "sha256": "3c7d3d959b8f689aae973b7b2ba0398bf062b47d8f5da2dacbd754825dcecb07"
+  },
+  "runs/manual/data/episode_000013.json": {
+    "bytes": 11737,
+    "sha256": "5e1dccec9708e02bb021ef9b687e788b897b95637e047b7e8147bad788feff23"
+  },
+  "runs/manual/data/episode_000013.npz": {
+    "bytes": 36067,
+    "sha256": "27e282eff03a636cd3413da8cb1bb4a54c3bd786027be1f017d53fa40bcfad66"
+  },
+  "runs/manual/data/episode_000014.json": {
+    "bytes": 19842,
+    "sha256": "e4e687d2c8cf5645799d86fc1434cfb6ded90fcf9a5d9d63847226509c1e9639"
+  },
+  "runs/manual/data/episode_000014.npz": {
+    "bytes": 144877,
+    "sha256": "107f18f9e400dc7592d08e2e3e87c3f0894e0623477dafdb1a363a607fe5f66e"
+  },
+  "runs/manual/data/episode_000015.json": {
+    "bytes": 17284,
+    "sha256": "7719030d0f86c0d40946d3a3601141737699fdbe28ffde145a3d7b57c4287278"
+  },
+  "runs/manual/data/episode_000015.npz": {
+    "bytes": 222824,
+    "sha256": "c6b37c4d5f8d1aff647af7f51dceb926b2096f953250fddc68509f9ed46d7060"
+  },
+  "runs/manual/data/episode_000016.json": {
+    "bytes": 15582,
+    "sha256": "f9391265a0b6a8b3f3f2c152fa8ccc9b4585f1604b5e2da3ab71373a2fc7d581"
+  },
+  "runs/manual/data/episode_000016.npz": {
+    "bytes": 171768,
+    "sha256": "9643c209e6a58283d51ba5add6de2db0897168fd2ab36b3301be09db55db86af"
+  },
+  "runs/manual/data/episode_000017.json": {
+    "bytes": 17216,
+    "sha256": "d78284adfb35254428e6fad634b9b93c5f8e00bd5fef7ed7557b399127998069"
+  },
+  "runs/manual/data/episode_000017.npz": {
+    "bytes": 81244,
+    "sha256": "52ee1c533dbafddbfd65afe5907d4a29fb9f3851591b6be0bfbd0436cc2cdc79"
+  },
+  "runs/manual/data/episode_000018.json": {
+    "bytes": 23349,
+    "sha256": "0ad6ec9840b177863785d85d95e6bf4075f47a410ac5f075654ec5981ca8d870"
+  },
+  "runs/manual/data/episode_000018.npz": {
+    "bytes": 35802,
+    "sha256": "a2f810b04b0ee783d8dc0e082621b9d07cf6c3762b676f7fa906e5bff40a9e46"
+  },
+  "runs/manual/data/episode_000019.json": {
+    "bytes": 11109,
+    "sha256": "ac9b5708e2a91c63ac5ed0733578849e79043ea40a6f17589be4faf81d75fc9e"
+  },
+  "runs/manual/data/episode_000019.npz": {
+    "bytes": 99811,
+    "sha256": "6326033ddce74f0696ee060388174c60934c18c330cdb8274c782a9d013c88ce"
+  },
+  "runs/manual/data/episode_000020.json": {
+    "bytes": 19758,
+    "sha256": "2940cbec095c3e2cbd223418ccc1f636c92d48198bd3a65e897e440a7e5b62df"
+  },
+  "runs/manual/data/episode_000020.npz": {
+    "bytes": 116023,
+    "sha256": "7e5ffb93a3449f2a997cdc1b18317b1244433067f5707908902b44c4291c94dd"
+  },
+  "runs/manual/data/episode_000021.json": {
+    "bytes": 13284,
+    "sha256": "f8abf9b47040bdd70a6e9b47794132bead66717aa2b77da22fe5fe52d5575444"
+  },
+  "runs/manual/data/episode_000021.npz": {
+    "bytes": 140290,
+    "sha256": "790fb83651588dea7fdfd3dfe44bfc35cea3545127f63a77df404ec4b7905ae8"
+  },
+  "runs/manual/data/episode_000022.json": {
+    "bytes": 18505,
+    "sha256": "21227a93a3d9493b9f55b4e429b6b2b2ec7fa6a1fe087a0fb873a789c991d6b8"
+  },
+  "runs/manual/data/episode_000022.npz": {
+    "bytes": 161842,
+    "sha256": "1b295d09b90d0d669b0ed7021b4ea2ff40fac2a2ecfbaee1af3c8fc4029a76b6"
+  },
+  "runs/manual/data/episode_000023.json": {
+    "bytes": 23063,
+    "sha256": "c00cc29cf22d433398074431ad0657568ae4534d9dbe98c0c6712863ab6a2e5c"
+  },
+  "runs/manual/data/episode_000023.npz": {
+    "bytes": 180857,
+    "sha256": "ace311a62bc4343849c6efee868f5e9d9699c675152756f3f07510af777c88ac"
+  },
+  "runs/manual/data/episode_000024.json": {
+    "bytes": 17584,
+    "sha256": "54213e07aa2678efd191cdd465574e21060fecf8b0f40f342601a5a34ab37f71"
+  },
+  "runs/manual/data/episode_000024.npz": {
+    "bytes": 155439,
+    "sha256": "97772a332482051e9b0c154c790a9248f4aa73fe32beca6526b279521a29f5db"
+  },
+  "runs/manual/data/episode_000025.json": {
+    "bytes": 8027,
+    "sha256": "b6679e7958b8b27a3b955397bff1fb88444019401f34b3a1b493d169bcc12d1f"
+  },
+  "runs/manual/data/episode_000025.npz": {
+    "bytes": 74273,
+    "sha256": "51fdf7b6032e798257bc678b51a53e12b47451c3970b8d582a0694f38795f405"
+  },
+  "runs/manual/data/episode_000026.json": {
+    "bytes": 18633,
+    "sha256": "642992f0513f9dafe8dfbbc872441e71fe6a7232c8ab7e20ca03e0c363137bd5"
+  },
+  "runs/manual/data/episode_000026.npz": {
+    "bytes": 207879,
+    "sha256": "086b70d02cbabf8aacd7dd1738838a08c9a161461ccd60d5b47842287c367baf"
+  },
+  "runs/manual/data/episode_000027.json": {
+    "bytes": 11162,
+    "sha256": "ed623b0dc862fcbddee29af66be2ddf56e53bf7500815152f20fc16b06315a6f"
+  },
+  "runs/manual/data/episode_000027.npz": {
+    "bytes": 94776,
+    "sha256": "994c39673ee4e82ec8271a010647103f87e329374995aa97b24335d8b43740c8"
+  },
+  "runs/manual/data/episode_000028.json": {
+    "bytes": 20312,
+    "sha256": "0ab8575d3b583d79b940614cb8d004078fd0c6a8b793ce8894a91569adde724e"
+  },
+  "runs/manual/data/episode_000028.npz": {
+    "bytes": 173402,
+    "sha256": "5a262d35410937e74e35804796aaf7c567dd8dc2073dd9692f2d94519f2bf1a5"
+  },
+  "runs/manual/data/episode_000029.json": {
+    "bytes": 18476,
+    "sha256": "56d1d88747f9702fa9f86bcbc9f3fcca971682a5fc3c40d309eda7181a35974e"
+  },
+  "runs/manual/data/episode_000029.npz": {
+    "bytes": 189772,
+    "sha256": "679b99991ba199552aad6f1cfdf5f41fc254ad40d6f66a01186a55629dd49446"
+  },
+  "runs/manual/data/episode_000030.json": {
+    "bytes": 14210,
+    "sha256": "f42e72738011e4fa6d2b6b0623eb3a758b6b0618368e98e745930d7b1395cdbf"
+  },
+  "runs/manual/data/episode_000030.npz": {
+    "bytes": 114248,
+    "sha256": "6a18b32c438355dae060fa96821fd42c3e14ebdadae05d0806c72ac2df9735b6"
+  },
+  "runs/manual/data/episode_000031.json": {
+    "bytes": 18904,
+    "sha256": "621e64453a5d0b61b582b925d682cc9633ba1ca87ad68d266680f0bf56fe39f6"
+  },
+  "runs/manual/data/episode_000031.npz": {
+    "bytes": 185018,
+    "sha256": "5bd3208c5e82002069e3aef27620877fcd2a7de25b1c0be701b4b8c46da0350f"
+  },
+  "runs/manual/data/episode_000032.json": {
+    "bytes": 14756,
+    "sha256": "a684612d6a6d30118820b3881e86251bc41deb0529c54fef8a53a31ef91e5142"
+  },
+  "runs/manual/data/episode_000032.npz": {
+    "bytes": 129952,
+    "sha256": "ada83e8ea1e479d7d9932c93ca94b2db33bca2abe86b9dbe2f5610c2a625556f"
+  },
+  "runs/manual/data/episode_000033.json": {
+    "bytes": 14411,
+    "sha256": "e5ad17d16b11c59b8132ac16b69d14b32eda70c7f1a4ee17b434e2618a144418"
+  },
+  "runs/manual/data/episode_000033.npz": {
+    "bytes": 197997,
+    "sha256": "2f85f15799ed1f8c11472aa227ec0c355a8664d26549ff38b52d6b43edbe4e72"
+  },
+  "runs/manual/data/episode_000034.json": {
+    "bytes": 22302,
+    "sha256": "e1fcc7a45f9c42d00cc1faffde23aa50bcb66031564a258e639aa9588ce60d6d"
+  },
+  "runs/manual/data/episode_000034.npz": {
+    "bytes": 144665,
+    "sha256": "08def178632735c9da36347890f9ff4e5b749bdb5173c13d8664c352bc969de5"
+  },
+  "runs/manual/data/episode_000035.json": {
+    "bytes": 13028,
+    "sha256": "6f0280ecd28abfbc7af797bd2781cacf5fb2f1041bcb069e45a4af99efa10f6e"
+  },
+  "runs/manual/data/episode_000035.npz": {
+    "bytes": 133773,
+    "sha256": "451ecfcb5a132c9679daafdd6630cffb4a6f2c2eba3cc40a79ad5aea9d214e3d"
+  },
+  "runs/manual/data/episode_000036.json": {
+    "bytes": 20040,
+    "sha256": "b51733b82b776c4a0df38e70abe8e52655032d2d52e59464d069aff2243858f6"
+  },
+  "runs/manual/data/episode_000036.npz": {
+    "bytes": 155949,
+    "sha256": "22bb20b36b9dc59c4de7dddae6a6b2b35ea91b4d81f68f356f2daccd8fd185a8"
+  },
+  "runs/manual/data/episode_000037.json": {
+    "bytes": 19954,
+    "sha256": "6bcb87c30f2c7620bd95140add3edbfd1049b04d626c56e570d5f8c7b80d3bc0"
+  },
+  "runs/manual/data/episode_000037.npz": {
+    "bytes": 28850,
+    "sha256": "7278747f33d7b46b891a575d40b2f135eb6c4006c70e0f221521437c57a690f3"
+  },
+  "runs/manual/data/episode_000038.json": {
+    "bytes": 18608,
+    "sha256": "b1e48130802c6d02e2f7a28536b13658802f1be314341a73416e59903e957b32"
+  },
+  "runs/manual/data/episode_000038.npz": {
+    "bytes": 171024,
+    "sha256": "0d83a53f3e24fae8c843e8ffd46a474954880a11b12c6867a900da57e3e0e85a"
+  },
+  "runs/manual/data/episode_000039.json": {
+    "bytes": 18857,
+    "sha256": "013daa25a7578b1e5a5546daea3c400de486bea896b3add3e67783497ee52d3b"
+  },
+  "runs/manual/data/episode_000039.npz": {
+    "bytes": 215127,
+    "sha256": "71baa9bb1002403dcc22e3077f7cf62cbe0db1da7b142fba7cd1612573ba0c90"
+  },
+  "runs/manual/data/episode_000040.json": {
+    "bytes": 11909,
+    "sha256": "3bfd0a672d58161cf9402f5b779434a1098e991875d2f8a9585038eb32eb67f0"
+  },
+  "runs/manual/data/episode_000040.npz": {
+    "bytes": 113987,
+    "sha256": "5b7b84c31c5504a989079512f8ec65da581772ff9b411b7dba662a40a1d4f0b8"
+  },
+  "runs/manual/data/episode_000041.json": {
+    "bytes": 19982,
+    "sha256": "95899195fec0d41aafc6c988fbcc80db527a2d433d2f45a79aae634f8f27e964"
+  },
+  "runs/manual/data/episode_000041.npz": {
+    "bytes": 200914,
+    "sha256": "3d3929e479655dcfd9a015e9a0b0dcb9da0b6cf923359670dd1dbe2fe3272456"
+  },
+  "runs/manual/data/episode_000042.json": {
+    "bytes": 17849,
+    "sha256": "fc18f254bd2c8a0c204133a3bf3dcbde5d7c98e5c06e43091e8167d6b0f73f29"
+  },
+  "runs/manual/data/episode_000042.npz": {
+    "bytes": 141599,
+    "sha256": "b755eb25c6402ac892a66f4284fbf955825b953497cd83dac153834ab3c6a9db"
+  },
+  "runs/manual/data/episode_000043.json": {
+    "bytes": 17128,
+    "sha256": "aeb3e62a6764f51fd6f1b484d1b3deaa897d92a35dd2ce7ac4902422335a5ff6"
+  },
+  "runs/manual/data/episode_000043.npz": {
+    "bytes": 219226,
+    "sha256": "e3d3ff5aa3803f0a287c213ed571311e7f614e911a3bc5e6741233923d296082"
+  },
+  "runs/manual/data/episode_000044.json": {
+    "bytes": 18864,
+    "sha256": "3e93a70c9f4dad56352a492e5350c12568748eda0fb238f6594ab2b4e61a979d"
+  },
+  "runs/manual/data/episode_000044.npz": {
+    "bytes": 157567,
+    "sha256": "ebdb3b1ba60d8abc332a8e41d2f9cc904336f7adb32530a06edb79235faa577b"
+  },
+  "runs/manual/data/episode_000045.json": {
+    "bytes": 21938,
+    "sha256": "e83ce4508f20ee882abeef64cf63bd4452038f1e015edcd9ea14a34b3b1b1abe"
+  },
+  "runs/manual/data/episode_000045.npz": {
+    "bytes": 45633,
+    "sha256": "accb3fb43cf2d6ec0be4a67aa5af2439c252e05869dc730ea1d53e1b4cac2aa1"
+  },
+  "runs/manual/data/episode_000046.json": {
+    "bytes": 13740,
+    "sha256": "e86eebaaf9dee8a4f472c302272cbc9e377719031f76fe5c3c3b6c68c0819442"
+  },
+  "runs/manual/data/episode_000046.npz": {
+    "bytes": 45851,
+    "sha256": "9a129013b1ec36d51a84cc8bf37ad2e17e83a61fd1e3abb635ed9136fd72f881"
+  },
+  "runs/manual/data/episode_000047.json": {
+    "bytes": 20319,
+    "sha256": "5816b2c952478366a19d5a335f87c160f5633f67a291760bd175c3406b2c430f"
+  },
+  "runs/manual/data/episode_000047.npz": {
+    "bytes": 26727,
+    "sha256": "868a4c7d683b35a05ac35b544cab37ef4d97a344a720dbf151e8eb7e02d761b4"
+  },
+  "runs/manual/data/episode_000048.json": {
+    "bytes": 22123,
+    "sha256": "b01350bc6f0fed0db03d1d7a6986b8025f1e179283ef1b27d70724a094ae54cf"
+  },
+  "runs/manual/data/episode_000048.npz": {
+    "bytes": 133369,
+    "sha256": "aea01242045f30c7063416c39716ee7db5dc887b32ad23322d60050eda5673ca"
+  },
+  "runs/manual/data/episode_000049.json": {
+    "bytes": 19410,
+    "sha256": "3bd0f4e63761f8d1b26e17721c2e0d527dbb1eea163d6f3dd22d5b167c8b37dc"
+  },
+  "runs/manual/data/episode_000049.npz": {
+    "bytes": 187450,
+    "sha256": "ce11ffcde748967531c1170d98116aaaaa2197de3b14c9f614bbd94cad8a7188"
+  },
+  "runs/manual/data/episode_000050.json": {
+    "bytes": 13841,
+    "sha256": "8aebca2fde5a1bc03c593f3934ae318cef77d2394e06dde254372e8be3b0c9eb"
+  },
+  "runs/manual/data/episode_000050.npz": {
+    "bytes": 131694,
+    "sha256": "815bd840b2b554354d7a596a6181899279eff4eb58da627ba9a113807a296cc7"
+  },
+  "runs/manual/data/episode_000051.json": {
+    "bytes": 19075,
+    "sha256": "275d96ab963cb06e2e7a894d2003587c72a898a608314b6f1fcf22c208b4e9b2"
+  },
+  "runs/manual/data/episode_000051.npz": {
+    "bytes": 221153,
+    "sha256": "61653a0b4d74ddc6a4e3db893a41fb09457fa04aa158d276008ae1b68bd3aab9"
+  },
+  "runs/manual/data/episode_000052.json": {
+    "bytes": 22123,
+    "sha256": "b04cac02e6e7232bd98153e2e5856980477706d691989bf5e463bc249b13217d"
+  },
+  "runs/manual/data/episode_000052.npz": {
+    "bytes": 74109,
+    "sha256": "7ccc9fa6365231c8fb1f5eaad7828d39560cbb625582c186aaf0b2f3a375c4f9"
+  },
+  "runs/manual/data/episode_000053.json": {
+    "bytes": 14596,
+    "sha256": "4ed385f2b68f58c7e097c36e78f695f4125d04f217a69a6d5a934f25266ed522"
+  },
+  "runs/manual/data/episode_000053.npz": {
+    "bytes": 22924,
+    "sha256": "c392082b1146ab1f0e56ee8c52bea7cd68de1b6be6cf027119d478956283c6d3"
+  },
+  "runs/manual/data/episode_000054.json": {
+    "bytes": 21023,
+    "sha256": "353c2f8b05ab7056cfcc85316cfe57f7988a681bb77df96975dc13382c0db7c0"
+  },
+  "runs/manual/data/episode_000054.npz": {
+    "bytes": 162307,
+    "sha256": "7c484e7df5fd2bad9ef9232c52cc2d821015e5a6e10609fc66ce8de5a1446485"
+  },
+  "runs/manual/data/episode_000055.json": {
+    "bytes": 19688,
+    "sha256": "f31b23c6ebf384892f8f3fd95de5efe6bff2ca472c87a5c8ebd793efc48ed969"
+  },
+  "runs/manual/data/episode_000055.npz": {
+    "bytes": 127256,
+    "sha256": "b85419e8460b7dd1ed8f0c166b108aaf569b77e773c5952a3cb0555aa79b3ef1"
+  },
+  "runs/manual/data/episode_000056.json": {
+    "bytes": 12442,
+    "sha256": "b981f21e361721245106c6cb464511b12791c817824a1805f1e4f815595ccc50"
+  },
+  "runs/manual/data/episode_000056.npz": {
+    "bytes": 102980,
+    "sha256": "9206de771949f53ee99bcb0a27724a29ba890994035a8e58a17ac770180e4b67"
+  },
+  "runs/manual/data/episode_000057.json": {
+    "bytes": 19235,
+    "sha256": "85c0d94942cef5d40042ceafb893cd9b9ec143aa970fe07f26a92588b7e3407f"
+  },
+  "runs/manual/data/episode_000057.npz": {
+    "bytes": 218569,
+    "sha256": "3081b33a16bc9a83f688dc9326c7f01d74fa694c7aceec534e3b180c80b14ec5"
+  },
+  "runs/manual/data/episode_000058.json": {
+    "bytes": 20543,
+    "sha256": "d738b0147f14f359961bfefc21085d55baadb96d75f2b659894bef2f88397ea1"
+  },
+  "runs/manual/data/episode_000058.npz": {
+    "bytes": 153968,
+    "sha256": "a02ce7e7956d1feb99a3343844087bbc72d6ffd470920cad4964d2c533d94328"
+  },
+  "runs/manual/data/episode_000059.json": {
+    "bytes": 16267,
+    "sha256": "6c950a5eaae6950fb8e496460f0386f4c1f6d3dd9af2586c2a79d5dd2f7742e2"
+  },
+  "runs/manual/data/episode_000059.npz": {
+    "bytes": 191918,
+    "sha256": "8a0619582fe96f4ae944724863d08ab35273299c2fac934f5bdb973c729ea80e"
+  },
+  "runs/manual/data/episode_000060.json": {
+    "bytes": 19943,
+    "sha256": "49c8792e08ca783e4e293f1d5a545b61c4cc7384ffb58f8f7f0c8278ab51632c"
+  },
+  "runs/manual/data/episode_000060.npz": {
+    "bytes": 98997,
+    "sha256": "992cc6d79253b872741fe507c7bcfe679a3cc113b77e5ad56b7f71a2f67feaa2"
+  },
+  "runs/manual/data/episode_000061.json": {
+    "bytes": 10165,
+    "sha256": "a945e1ac5f2bc3895d289914e51c216c38edc7db8c1a563dcc7a5083dd0d68ae"
+  },
+  "runs/manual/data/episode_000061.npz": {
+    "bytes": 130144,
+    "sha256": "b5604fb964b1c48071ddf3352f901cb5a2e1cbb4bea5ff6bec7880935a1886c1"
+  },
+  "runs/manual/data/episode_000062.json": {
+    "bytes": 17441,
+    "sha256": "ab68a25faa1e0c7794773baf2254e893c27563a66a3317536b3dc07e6b78334e"
+  },
+  "runs/manual/data/episode_000062.npz": {
+    "bytes": 132718,
+    "sha256": "731a41a53e20232f84ac34500d173cb730beaddec438cdb37175bf59c8218d69"
+  },
+  "runs/manual/data/episode_000063.json": {
+    "bytes": 16828,
+    "sha256": "cff1d805475887ab9de2c6ffc0d17485caa2ab606789fcc3c9446d085a5b9ee6"
+  },
+  "runs/manual/data/episode_000063.npz": {
+    "bytes": 197987,
+    "sha256": "f79a76792102cfe77d3948e9088d73eb9ebb3cea6bd95ae87dd25c3a610413a5"
+  },
+  "runs/manual/data/episode_000064.json": {
+    "bytes": 17144,
+    "sha256": "2a199fc0b3e3342c9a9218d88f83db0f8bd8b266cfbcb520f3c48217cf11132d"
+  },
+  "runs/manual/data/episode_000064.npz": {
+    "bytes": 74585,
+    "sha256": "b2cccace89b072bd81c1b7728e44487edbd3ffcb5b3efa113ad36d9049c1cca4"
+  },
+  "runs/manual/data/episode_000065.json": {
+    "bytes": 8833,
+    "sha256": "460b77c0e73098d4fa3b8e186d2dcebbc945fec05465ee80d2fe4b77dcedc8c4"
+  },
+  "runs/manual/data/episode_000065.npz": {
+    "bytes": 55825,
+    "sha256": "f2ba6ab68bacba518cc6335b32c9ea2d42f81ccdddfb02448103093669535268"
+  },
+  "runs/manual/data/episode_000066.json": {
+    "bytes": 20066,
+    "sha256": "4e16bd3e633ec704e29d107c01345163e46ace0ecf1094a5c466ef999159f75a"
+  },
+  "runs/manual/data/episode_000066.npz": {
+    "bytes": 176047,
+    "sha256": "318b53a169ec5fd6e98c98aa7a64c1dcf869d75133724458a3cb3c9bc2fa8241"
+  },
+  "runs/manual/data/episode_000067.json": {
+    "bytes": 18100,
+    "sha256": "25e55e54e172f5a691243517b6f1bddfec75ff71602f51a3bb6db919e9c5ba9b"
+  },
+  "runs/manual/data/episode_000067.npz": {
+    "bytes": 180512,
+    "sha256": "6ed81df0cce54e687a3da9346c372ce9bbf91be7605e82a67928db83faa1a44c"
+  },
+  "runs/manual/data/episode_000068.json": {
+    "bytes": 18103,
+    "sha256": "a9990ba6f4eef0375d5bf889fa5b652d77f66543383b2ec589cfefdef3fb0260"
+  },
+  "runs/manual/data/episode_000068.npz": {
+    "bytes": 4539,
+    "sha256": "9f759008f549ee8ac1986da72015fe88501f11a172de51e0498f2db672785766"
+  },
+  "runs/manual/data/episode_000069.json": {
+    "bytes": 17114,
+    "sha256": "fd0c80379a990df2fad69ad8088616ea4d8cf0398de3a40dcc9d3ae3ed57bc28"
+  },
+  "runs/manual/data/episode_000069.npz": {
+    "bytes": 8888,
+    "sha256": "faa79506bdb527b31fdc74c532e59ee737464f836e321dde0b581210f58f9e9b"
+  },
+  "runs/manual/data/episode_000070.json": {
+    "bytes": 17077,
+    "sha256": "cc1da2a641475c9e8ff35c7db1305a28be03fd30920cc69c6925beb12218f26c"
+  },
+  "runs/manual/data/episode_000070.npz": {
+    "bytes": 6284,
+    "sha256": "b8cf29850419a28aa42e10e79c1e43e49386868d5984668d9ca1d5f688064efd"
+  },
+  "runs/manual/data/episode_000071.json": {
+    "bytes": 21458,
+    "sha256": "8ba7176d9d0414ae327195fb33c224bc873800798d8241755dfc9942f783f385"
+  },
+  "runs/manual/data/episode_000071.npz": {
+    "bytes": 6388,
+    "sha256": "f4a1c9bafe4db7c234626df22f2886dda522c04e3096edd33562348614f8abfd"
+  },
+  "runs/manual/data/episode_000072.json": {
+    "bytes": 11315,
+    "sha256": "e3e313fddcc5fa0019428a272a44a2a0305ff90f5075c1a108aaa4337fde0b97"
+  },
+  "runs/manual/data/episode_000072.npz": {
+    "bytes": 7570,
+    "sha256": "890eb7cddb7d25566cd2e38f502c91d91a72da4a3f9e2c1e54a5fc596df898f2"
+  },
+  "runs/manual/data/episode_000073.json": {
+    "bytes": 19632,
+    "sha256": "d816c3e243f26b7f8b207e3b6d90bdd058680fcc5f6c230d70a22f96db3e3d92"
+  },
+  "runs/manual/data/episode_000073.npz": {
+    "bytes": 8322,
+    "sha256": "aa2f4ff16babfb0a8ff570785aae5aaeb21a1a7ed5d7916dd69b7a0221c5a3a9"
+  },
+  "runs/manual/data/episode_000074.json": {
+    "bytes": 18432,
+    "sha256": "5203743f4dd1bb0db3d7d3d29b71d6ded4f564ab8abe59a41c3f34dae4d4cf25"
+  },
+  "runs/manual/data/episode_000074.npz": {
+    "bytes": 15088,
+    "sha256": "14013f67cd3fcb59fb124dc51d868c6089b1fe72755ef0e5a2487be0ec7ff20c"
+  },
+  "runs/manual/data/episode_000075.json": {
+    "bytes": 23184,
+    "sha256": "5a6204323a09e8346379c3e7cfd78fde91c83d738af5899727b021164daceebd"
+  },
+  "runs/manual/data/episode_000075.npz": {
+    "bytes": 9122,
+    "sha256": "a1adf651d523c91b03bad87c33e5d77ce48589f81916132a36dd555337df9b1e"
+  },
+  "runs/manual/data/episode_000076.json": {
+    "bytes": 20844,
+    "sha256": "254d4faf2d79ceebfdafd6eab69e10cc9521a2827e2aaba63cd55a64cc85cf53"
+  },
+  "runs/manual/data/episode_000076.npz": {
+    "bytes": 8471,
+    "sha256": "a18722d3327eb908f167550271ae050e6b5009c04faa8917e2dcfa1f30505f12"
+  },
+  "runs/manual/data/episode_000077.json": {
+    "bytes": 14425,
+    "sha256": "4cbe279e33da5fe16abed839f36d3993ba1bae75d0144439c4577545e4e35dc6"
+  },
+  "runs/manual/data/episode_000077.npz": {
+    "bytes": 69965,
+    "sha256": "392c8b7fe1e97d00e669fe2174660077e5dccf62f74363dd7f904c4eb2f274fe"
+  },
+  "runs/manual/data/episode_000078.json": {
+    "bytes": 15727,
+    "sha256": "37f1dccf085c279e2ad5f7c2a245ed403675161611000948b81d15da1b09c2a4"
+  },
+  "runs/manual/data/episode_000078.npz": {
+    "bytes": 13228,
+    "sha256": "45823f9a1513a9cf4aae823b2eca98e745039000411e10042b09f29dd4d90180"
+  },
+  "runs/manual/data/episode_000079.json": {
+    "bytes": 18161,
+    "sha256": "d531b9c4049dc448ab670386c17027a89ce83afc95c16be22bad0c8d4c681c32"
+  },
+  "runs/manual/data/episode_000079.npz": {
+    "bytes": 141990,
+    "sha256": "4ad6ef846d5d5bd5b28ac2e616040235b3c95a31172128438717f0cb9dfefce7"
+  },
+  "runs/manual/data/episode_000080.json": {
+    "bytes": 20048,
+    "sha256": "b57c559af8787346086f778fe0b16bbca07fd18cb505eb7558c7e8d2f0fcbf3c"
+  },
+  "runs/manual/data/episode_000080.npz": {
+    "bytes": 7228,
+    "sha256": "6c75560d8da2422ff9468a2920a02e91d32a50ae0c7d65bcc27a3f99e1db10be"
+  },
+  "runs/manual/data/episode_000081.json": {
+    "bytes": 19541,
+    "sha256": "12992f2d459796dcfbf93315521cfcee7c2cb2d9fe989d02c9e1a3392e4fdb96"
+  },
+  "runs/manual/data/episode_000081.npz": {
+    "bytes": 10128,
+    "sha256": "8ae4f02e89f546c0eb731746e2cd907ede95511650497aa5ccad379e9a3d968a"
+  },
+  "runs/manual/data/episode_000082.json": {
+    "bytes": 18985,
+    "sha256": "3e04f27a5212c5800957b86d75afdcace2f183430013d965c2d06ceeba68afdf"
+  },
+  "runs/manual/data/episode_000082.npz": {
+    "bytes": 17038,
+    "sha256": "5de9d6386b3a05e9e3a7b44cf63f697d405a5e462ff04ee75cc83177a259fa44"
+  },
+  "runs/manual/data/episode_000083.json": {
+    "bytes": 17160,
+    "sha256": "21a4b5c3132dafeb17c5049a10057bb63d2798d1b7557b64dd10eac9f08c2e2c"
+  },
+  "runs/manual/data/episode_000083.npz": {
+    "bytes": 26588,
+    "sha256": "3a15ccfb749255a2d5ee7b595d796ab30976c59393238238f86813f9f670acd4"
+  },
+  "runs/manual/data/episode_000084.json": {
+    "bytes": 21093,
+    "sha256": "14e5091c090a534cde28355828a5b1fd8455906f9a609ca786cc170e6bc7c0cf"
+  },
+  "runs/manual/data/episode_000084.npz": {
+    "bytes": 8515,
+    "sha256": "1ef911fbf5cabfb33ebcf95831fd5a87d03d6d75095aca37f6e972ccb94f54bc"
+  },
+  "runs/manual/data/episode_000085.json": {
+    "bytes": 23296,
+    "sha256": "8b0878344e5ebe8c616ee3e0d668580c540fcd82a51e84beb7d581f6b14dda22"
+  },
+  "runs/manual/data/episode_000085.npz": {
+    "bytes": 60513,
+    "sha256": "bad091d077c426ceaea2f7b21321205fb9ad79efbc7ab7ef5bbb88ac20df0461"
+  },
+  "runs/manual/data/episode_000086.json": {
+    "bytes": 16398,
+    "sha256": "d711119be6ff62bbae544bb83e649f4e98248863ac9f9fe3cae5e65c21f739bb"
+  },
+  "runs/manual/data/episode_000086.npz": {
+    "bytes": 16670,
+    "sha256": "3ab9262518f268a9513151f16731457fd7846b9ba4e41df03cb0d1c2705a5494"
+  },
+  "runs/manual/data/episode_000087.json": {
+    "bytes": 11446,
+    "sha256": "e180f46aa4e82b22e69c8ab76b24afbc80a160b9a8ec63a33fcb5a47c6a70265"
+  },
+  "runs/manual/data/episode_000087.npz": {
+    "bytes": 35703,
+    "sha256": "cc3c3e0c96163b9e13456c146438d6f17be8969163e9ee1e44c5b3f041e4a27a"
+  },
+  "runs/manual/data/episode_000088.json": {
+    "bytes": 14269,
+    "sha256": "9c1452493593f9d5eac626e6bd8267c4cd8fbd4374db894c799b7be60a926700"
+  },
+  "runs/manual/data/episode_000088.npz": {
+    "bytes": 194802,
+    "sha256": "ea1bb6ae8f908b2a2070f2bb54f210e80fba7026780eddc88365272b6ecd4441"
+  },
+  "runs/manual/data/episode_000089.json": {
+    "bytes": 18651,
+    "sha256": "94e1aa59f8a8644df32e828959a3fcbb839631c6ff99ee1fc19b67fd78902a63"
+  },
+  "runs/manual/data/episode_000089.npz": {
+    "bytes": 62750,
+    "sha256": "aa4902f3038fbec30a8c6921396249c56bf40710c4413079bf49abb94e9ae406"
+  },
+  "runs/manual/data/episode_000090.json": {
+    "bytes": 14547,
+    "sha256": "e1f8a2660a7cd91c108449189a5f4a43b600e5c79ff5778d6b6281ec6f0a53c8"
+  },
+  "runs/manual/data/episode_000090.npz": {
+    "bytes": 13643,
+    "sha256": "dd442bcbd6ab5ecdfe64149af2f07750943a7b22810a1e3d48c4940dac655766"
+  },
+  "runs/manual/data/episode_000091.json": {
+    "bytes": 21364,
+    "sha256": "daf14fe99a4c36104375c9d71233fc6851f87931aec535a798d5a39e8c4a4ebf"
+  },
+  "runs/manual/data/episode_000091.npz": {
+    "bytes": 56598,
+    "sha256": "5cbfbeaab2258d72ce9b5e24b4e44f97310aa13d0576721545d0093dd2d19e26"
+  },
+  "runs/manual/data/episode_000092.json": {
+    "bytes": 21576,
+    "sha256": "8434b120495486674f3005508b3e6fcc4e9371d38362710b10eb03841c06f868"
+  },
+  "runs/manual/data/episode_000092.npz": {
+    "bytes": 10341,
+    "sha256": "dc5713671c1ca1c9df1811db40f48bef4c5863e2823820b93e047a52eb4eed3d"
+  },
+  "runs/manual/data/episode_000093.json": {
+    "bytes": 19852,
+    "sha256": "8d6c779bebab298465c2bbe2ada964a74d3a2722ca684d625d0701599c9b3a53"
+  },
+  "runs/manual/data/episode_000093.npz": {
+    "bytes": 7711,
+    "sha256": "40748c07d8d75e5235585f1f8aa3f87ad38641a7b4dc69734f493fdec88ce6b4"
+  },
+  "runs/manual/data/episode_000094.json": {
+    "bytes": 19128,
+    "sha256": "341522d462ded49adf529cdc0b4259fcd39a7f8d2ef6be57a29ea7d83aba8766"
+  },
+  "runs/manual/data/episode_000094.npz": {
+    "bytes": 36254,
+    "sha256": "150daa0d4aea5b2b3f6f3a2f7b05c95745353603c445c9484cf53a1f44498368"
+  },
+  "runs/manual/data/episode_000095.json": {
+    "bytes": 20613,
+    "sha256": "ac5039a04d622b71a2b5091ed1c26efd824576c5c18bd154dfe7414522838897"
+  },
+  "runs/manual/data/episode_000095.npz": {
+    "bytes": 15867,
+    "sha256": "1666c3735de9c34e084d3d3c811f2849165d6c6cf60d2b29931023d5f6f9672f"
+  },
+  "runs/manual/data/episode_000096.json": {
+    "bytes": 18637,
+    "sha256": "6d3cf5e8f75e5177e5fe2c0a0248380b05aa6364f228979cdc8f4f37357b72f1"
+  },
+  "runs/manual/data/episode_000096.npz": {
+    "bytes": 9121,
+    "sha256": "6961a7ebadb641850a72125940a215bfdc0a88dfe4409d2e7de2144b8326fe87"
+  },
+  "runs/manual/data/episode_000097.json": {
+    "bytes": 14474,
+    "sha256": "ea33c9d18c04e5788a43c923c05ca190b6da7d2183ea65cbf2bf929e29a1e5f0"
+  },
+  "runs/manual/data/episode_000097.npz": {
+    "bytes": 40734,
+    "sha256": "eed8a2087e9b27a317b25f2d71b4c416bc910ce676aeeda59c8125d7078c17da"
+  },
+  "runs/manual/data/episode_000098.json": {
+    "bytes": 18801,
+    "sha256": "f7e8ad014ddfbec58f44939bb220ac56f9c859d18bccdf656b9336f1236d9b9f"
+  },
+  "runs/manual/data/episode_000098.npz": {
+    "bytes": 21707,
+    "sha256": "3f6d62cd7d2251d58b5b330c4f07e3538a932d4545276c21073e1e3f86fc6cfe"
+  },
+  "runs/manual/data/episode_000099.json": {
+    "bytes": 19983,
+    "sha256": "a588e4cf22e3e0e97c6e77bc68da08f30d4e2565fb1fafd97deb2585455f39a1"
+  },
+  "runs/manual/data/episode_000099.npz": {
+    "bytes": 40946,
+    "sha256": "a892f626d66deb799c681b8b9afe5e22086578daebaa136122b0502f29d0589d"
+  },
+  "runs/manual/data/episode_000100.json": {
+    "bytes": 13342,
+    "sha256": "cd40d24f145dafe23eb7366619440ec9b8c1ac12530a2871c878076e82562d9f"
+  },
+  "runs/manual/data/episode_000100.npz": {
+    "bytes": 19095,
+    "sha256": "e91cfa7ca5db3e9030b8fb017e4b344973c76334878a8b6f0a2a7a0330cda837"
+  },
+  "runs/manual/data/episode_000101.json": {
+    "bytes": 18348,
+    "sha256": "7ea876a360f0c0eb0fe8fcf1947396c58ef564a50104947a7c7c2a974cc35265"
+  },
+  "runs/manual/data/episode_000101.npz": {
+    "bytes": 18344,
+    "sha256": "b15b72e36f0a5db5e067c5562b2e7977996aa18605e05a4e717f5c038800ba49"
+  },
+  "runs/manual/data/episode_000102.json": {
+    "bytes": 18794,
+    "sha256": "f188215b67c5e126070dd25ca7e54dc9a8cf548da5e7ef808eb2e0cc678a2856"
+  },
+  "runs/manual/data/episode_000102.npz": {
+    "bytes": 42275,
+    "sha256": "e799edc8637361a4db461df3c724eabbd6e7b98cc250907c23af666ca9c1d014"
+  },
+  "runs/manual/data/episode_000103.json": {
+    "bytes": 16381,
+    "sha256": "a3e9382cabb8e72b2a0cc40e6ca05eff207cc740a88cb76c71361d46fb69ef98"
+  },
+  "runs/manual/data/episode_000103.npz": {
+    "bytes": 194963,
+    "sha256": "b94ddfe8a55f67a48701fd64f4f138699df19d128c0754e2f963bb57b68331d4"
+  }
+}

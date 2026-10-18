@@ -1,0 +1,108 @@
+{
+  "audited_utc": "2026-10-17T17:46:06.402032+00:00",
+  "all_five_complete_fixed_development_plans_verified": true,
+  "all_candidate_hashes_and_summary_counts_verified": true,
+  "selected_maximum_preregistered_score": {
+    "index": 30,
+    "sac_updates": 1,
+    "score": [
+      0,
+      1,
+      -1,
+      0,
+      0.62825469227058,
+      -30
+    ],
+    "arrivals": 1,
+    "collisions": 1,
+    "red_violations": 0,
+    "clean_arrivals": 0
+  },
+  "selected_root_agent_hash_verified": true,
+  "final_uses_selected_hash": true,
+  "selection_mtime_unix": 1792258627.7071698,
+  "first_final_trace_mtime_unix": 1792258698.114334,
+  "final_results_used_for_selection": false,
+  "candidates": [
+    {
+      "index": 30,
+      "sac_updates": 1,
+      "score": [
+        0,
+        1,
+        -1,
+        0,
+        0.62825469227058,
+        -30
+      ],
+      "arrivals": 1,
+      "collisions": 1,
+      "red_violations": 0,
+      "clean_arrivals": 0
+    },
+    {
+      "index": 32,
+      "sac_updates": 71865,
+      "score": [
+        0,
+        1,
+        -2,
+        0,
+        0.5595756872624092,
+        -32
+      ],
+      "arrivals": 1,
+      "collisions": 2,
+      "red_violations": 0,
+      "clean_arrivals": 0
+    },
+    {
+      "index": 42,
+      "sac_updates": 326000,
+      "score": [
+        0,
+        1,
+        -2,
+        0,
+        0.5751413820435282,
+        -42
+      ],
+      "arrivals": 1,
+      "collisions": 2,
+      "red_violations": 0,
+      "clean_arrivals": 0
+    },
+    {
+      "index": 54,
+      "sac_updates": 613332,
+      "score": [
+        0,
+        1,
+        -2,
+        0,
+        0.5582667107530137,
+        -54
+      ],
+      "arrivals": 1,
+      "collisions": 2,
+      "red_violations": 0,
+      "clean_arrivals": 0
+    },
+    {
+      "index": 69,
+      "sac_updates": 841645,
+      "score": [
+        0,
+        1,
+        -1,
+        0,
+        0.5739164291901067,
+        -69
+      ],
+      "arrivals": 1,
+      "collisions": 1,
+      "red_violations": 0,
+      "clean_arrivals": 0
+    }
+  ]
+}

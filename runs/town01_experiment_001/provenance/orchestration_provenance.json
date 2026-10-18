@@ -1,0 +1,27 @@
+{
+  "created_utc": "2026-10-17T11:59:24.259281+00:00",
+  "adopted_existing_fit_without_restart": true,
+  "fit_pid": 644202,
+  "pipeline_pid": 645398,
+  "deadline_guard_pid": 645399,
+  "pipeline_state": {
+    "stage": "waiting_for_existing_fresh_fit",
+    "updated_utc": "2026-10-17T11:57:37.074074+00:00",
+    "pipeline_pid": 645398,
+    "adopted_fit_pid": 644202,
+    "adopted_start_ticks": "5420795"
+  },
+  "started_unix": 1792237630.635958,
+  "deadline_unix": 1792255630.635958,
+  "archive_count": 3,
+  "runtime_training_source_changes": [],
+  "orchestration_sources": {
+    "world_model_rl/deadline_keeper.py": "ae8b1e0417ba02af9235a85c6bbb8d1b739534d8ead434dc8287b2c3d5630628",
+    "world_model_rl/pipeline.py": "f8582ab9973469096b06591964447cb2b8d10f378ace0e888c4451c9c7d37413",
+    "world_model_rl/tests/test_deadline_keeper.py": "2f126b182a075a079f37d038daa45ad84ed182226d02c15f9e1260a263e6a2d1"
+  },
+  "orchestration_tests": "3 passed in 0.01s; generated files only",
+  "training_tests": "116 passed in 6.94s before real fitting",
+  "stage_commands_journal": "STAGE_COMMANDS.md",
+  "deadline_backup": "deadline_checkpoint.pt and deadline_checkpoint.json at the persisted deadline"
+}

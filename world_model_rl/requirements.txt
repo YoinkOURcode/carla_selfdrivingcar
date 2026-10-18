@@ -1,0 +1,4 @@
+# Install CARLA from this checkout's matching wheel; it is not fetched from PyPI here.
+numpy>=1.24,<3
+torch>=2.2
+networkx>=2.8

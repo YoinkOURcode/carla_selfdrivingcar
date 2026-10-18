@@ -1,0 +1,86 @@
+{
+  "updated_utc": "2026-10-17T05:32:28.663630+00:00",
+  "code": "world_model_rl",
+  "config": "world_model_rl/configs/collected.json",
+  "data": "runs/world_model_rl/data",
+  "world_model": "runs/world_model_rl/world_model.pt",
+  "world_model_source": "runs/town01_prototype_001/world_model.pt",
+  "world_model_sha256": "ef3f9b1e7d86e05abb09ece2e4b23a99995ddaa4cab350fdb6e044579ad3edca",
+  "world_model_status": "Preserved source weights; no joint adaptation or new SAC training launched",
+  "episodes": 234,
+  "transitions": 220420,
+  "splits": {
+    "train": 188,
+    "validation": 23,
+    "test": 23
+  },
+  "training_transitions": 173221,
+  "next_episode_id": 352,
+  "original_124_episode_contents_ids_splits_verified": true,
+  "source_datasets_preserved": true,
+  "excluded_sources": [
+    {
+      "path": "runs/experiment1/data",
+      "episodes": 105,
+      "reason": "Older reward contract; missing decision-comfort-v2 provenance and different comfort weights"
+    }
+  ],
+  "imports": [
+    {
+      "source": "runs/town01_training_data_001",
+      "episodes": 124,
+      "imported": 124,
+      "duplicates": 0
+    },
+    {
+      "source": "runs/experiment2/data",
+      "episodes": 105,
+      "imported": 105,
+      "duplicates": 0
+    },
+    {
+      "source": "runs/experiment3/data",
+      "episodes": 110,
+      "imported": 5,
+      "duplicates": 105
+    },
+    {
+      "source": "runs/experiment4/data",
+      "episodes": 68,
+      "imported": 0,
+      "duplicates": 68
+    },
+    {
+      "source": "runs/manual/data",
+      "episodes": 104,
+      "imported": 0,
+      "duplicates": 104
+    }
+  ],
+  "fitting_coverage_ready": true,
+  "validation_report": "runs/world_model_rl/validation.json",
+  "validation_scope": "Original frozen-model fixed ten-episode suite; new multi-scenario mode evaluates all holdouts separately by scenario",
+  "restart_command": "bash world_model_rl/train_collected.sh runs/town01_integrated_001 2000",
+  "guide": "world_model_rl/COLLECTED_TRAINING.md",
+  "code_sha256": {
+    "world_model_rl/__init__.py": "5b52c39b87987e3fabe28f4d1f9103511867993b8d068ff63f9f084b9b8d2a78",
+    "world_model_rl/__main__.py": "28619894c83a7236a0514dc32680ffa6dea20cb746b580148b9555bff438a3bc",
+    "world_model_rl/config.py": "c406246d974e2409b5f05d1e7d6222c240030c3d460e8119e7001f0f253e8acc",
+    "world_model_rl/control.py": "97ec42096093899eb845304158ac44728a083e4892f1400d44225cb7c2e81874",
+    "world_model_rl/data.py": "887c2b1868ce4a02cc3cc4a246f7148104635a39e76b631a3e7bdd8ebb0e4088",
+    "world_model_rl/environment.py": "6f0f8f60bd63648a19e880884286f8c61a4149199113c7dccce6178dcc3c91e1",
+    "world_model_rl/evaluation.py": "f22f333e38e91b6c7c2fb5c53719e15ee2f818dee1efb1f2a99709ac1940ec2a",
+    "world_model_rl/geometry.py": "24480616f843179cb439fa4ab343a017737b28fd76dad5ffc309f48ef715cb5f",
+    "world_model_rl/model.py": "9fdb95a7e94eacced601dfdc812fa4cc82a76354d23909c0150c6c1fef27386c",
+    "world_model_rl/observations.py": "6343add036163c91f2b2a2bd5cdd9f5fdfbdeeb5b888721fc78292d8569f249e",
+    "world_model_rl/policy.py": "2b9c6e1d1126b5705cd993e3c7a9ce6179a74448fb0b41c51a37bd5531ae9c1b",
+    "world_model_rl/rewards.py": "62b98072493c631b62af2051bfb481714c787fbd3da318fd00406b345955337e",
+    "world_model_rl/runner.py": "53c15501f2e5f0f4727fa274be5956309958a259eb704f6600bc92cccbd98f71",
+    "world_model_rl/sac.py": "ec6a8e82a145b952540a1be52633972dd936566f6b7a835dc0daf9dd295888df",
+    "world_model_rl/schema.py": "9166a5bdc0bb8e0ac11ec393b2da6f6a4ff12f0be287fd54121c6b0696b63ac4",
+    "world_model_rl/teachers.py": "45920ab0c3bc14232e047e22093256903e9c35890053a4405c23cf587631dd5c",
+    "world_model_rl/telemetry.py": "f57b95a239465c318036d752709cf3de2a46d1d447cebda66b3192edef745526",
+    "world_model_rl/training.py": "95c911c53a73cc8451f5d590460d41d83b35f0e3f2a6f6744c2a0a3310c62be2",
+    "world_model_rl/viewer.py": "c57911aec27f4dfb4b2c68438402019a8aa3142789edf43ba79e5456ae6576de"
+  }
+}

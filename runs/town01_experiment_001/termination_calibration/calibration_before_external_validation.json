@@ -1,0 +1,29 @@
+{
+  "scale": 0.4093349277973175,
+  "intercept": -2.0434861183166504,
+  "before": {
+    "positive_count": 151,
+    "negative_count": 227397,
+    "true_positive": 86,
+    "false_positive": 61,
+    "false_negative": 65,
+    "true_negative": 227336,
+    "threshold": 0.5,
+    "brier": 0.0004919233615510166,
+    "recall": 0.5695364238410596,
+    "precision": 0.5850340136054422
+  },
+  "after": {
+    "positive_count": 151,
+    "negative_count": 227397,
+    "true_positive": 51,
+    "false_positive": 11,
+    "false_negative": 100,
+    "true_negative": 227386,
+    "threshold": 0.5,
+    "brier": 0.000409195403335616,
+    "recall": 0.33774834437086093,
+    "precision": 0.8225806451612904
+  },
+  "updates": 1000
+}

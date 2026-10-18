@@ -1,0 +1,16 @@
+{
+  "recorded_utc": "2026-10-17T14:47:19.312975+00:00",
+  "checkpoint": "runs/town01_experiment_001/provenance/resume_20261017_1446/agent_cpu.pt",
+  "sha256": "cb135aff1ceebdfbc46198ee9e53e884223033e46ddd64d45e89128f9369b1c4",
+  "sac_updates": 350000,
+  "warmup_updates": 100000,
+  "block_updates_done": 0,
+  "last_logged_updates": 350100,
+  "unrecoverable_uncheckpointed_updates": 100,
+  "device_transition": "cpu to cuda",
+  "cuda_runtime_seed": 20261016,
+  "source_cuda_rng_state_count": 0,
+  "imagination_refresh_aligned": true,
+  "deadline_unix": 1792255630.635958,
+  "clock_reset": false
+}
