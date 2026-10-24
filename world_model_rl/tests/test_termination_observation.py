@@ -40,7 +40,7 @@ def test_visible_geometry_is_sorted_and_absent_poison_does_not_enter_head(cfg):
     second = model.termination_inputs(state, applied=applied, observation=changed)
     assert torch.isfinite(first).all()
     torch.testing.assert_close(first, second, rtol=0, atol=0)
-    assert model.termination_physical_size == 126
+    assert model.termination_physical_size == 125
 
 
 def test_training_features_align_current_observation_and_real_action(cfg):
@@ -49,7 +49,7 @@ def test_training_features_align_current_observation_and_real_action(cfg):
     norm, model = Normalizer.fit([episode]), RSSM(cfg.model, termination_observation_skip=True)
     inputs, _ = termination_examples(model, [episode], norm, cfg, 'cpu')
     context = episode.arrays['continuous'][:-1, :20]
-    np.testing.assert_allclose(inputs[:, 34:54], np.sign(context) * np.log1p(abs(context)), atol=1e-6)
+    np.testing.assert_allclose(inputs[:, 35:55], np.sign(context) * np.log1p(abs(context)), atol=1e-6)
     np.testing.assert_array_equal(inputs[:, -3:], episode.arrays['applied_actions'])
     batch = sample_sequences([episode], 2, 4, np.random.default_rng(3))
     loss, _ = model.sequence_loss(batch, norm, 'cpu')

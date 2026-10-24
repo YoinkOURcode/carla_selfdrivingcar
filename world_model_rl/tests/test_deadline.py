@@ -129,6 +129,8 @@ def test_deadline_during_readout_fit_saves_its_optimizer_and_actual_counts(cfg, 
 def test_sac_deadline_saves_completed_updates_and_separate_stop_log(cfg, tmp_path, monkeypatch):
     cfg.training.collection_episodes = cfg.training.refresh_updates = 0
     dataset, model_path = build_ready_model(cfg, tmp_path)
+    # Old configs may retain a positive refresh budget; timed SAC ignores it too.
+    cfg.training.refresh_updates = 200
     clock, now = controlled_clock(tmp_path, monkeypatch)
     monkeypatch.setattr(runner, "imagination_gate", lambda *a: (True, "numeric fixture only"))
     update = runner.SAC.update

@@ -1,12 +1,14 @@
 """User-invoked collection, pretraining, mixed-replay learning and evaluation."""
 
 import time
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
 import torch
 
 from .config import experiment_config_path, scenario_key
+from .collection import CollectionOptions, ControlPerturbations
 from .data import Dataset, EpisodeBuilder, append_json, write_json
 from .environment import CarlaDrivingEnv
 from .model import RSSM, tensor_observation
@@ -24,16 +26,22 @@ class DataCoverageError(ValueError):
     """Recorded data cannot support the configured fitting/validation checks yet."""
 
 
+def termination_support(episodes):
+    """Measure ending support without filtering or relabelling recorded episodes."""
+    positive = sum(int(ep.arrays['terminated'].sum()) for ep in episodes)
+    transitions = sum(map(len, episodes))
+    return {'episode_ids': [ep.metadata['episode_id'] for ep in episodes],
+            'transitions': transitions, 'positive_count': positive,
+            'negative_count': transitions - positive,
+            'terminal_density': positive / transitions if transitions else 0.0,
+            'truncated_count': sum(int(ep.arrays['truncated'].sum()) for ep in episodes),
+            'ending_reason_counts': dict(Counter(ep.metadata.get('terminal_reason', 'unspecified')
+                                                for ep in episodes))}
+
+
 def fitting_coverage(cfg, train, validation):
     """Inspect fixed splits before fitting; never select episodes by their outcomes."""
-    def support(episodes):
-        positive = sum(int(ep.arrays['terminated'].sum()) for ep in episodes)
-        transitions = sum(map(len, episodes))
-        return {'episode_ids': [ep.metadata['episode_id'] for ep in episodes],
-                'transitions': transitions, 'positive_count': positive,
-                'negative_count': transitions - positive,
-                'truncated_count': sum(int(ep.arrays['truncated'].sum()) for ep in episodes)}
-    result = {'train': support(train), 'validation': support(validation)}
+    result = {'train': termination_support(train), 'validation': termination_support(validation)}
     reasons = []
     if result['train']['transitions'] < max(1, cfg.training.minimum_real_steps):
         reasons.append(f"training split needs at least {max(1, cfg.training.minimum_real_steps)} transitions")
@@ -57,7 +65,7 @@ def fitting_coverage(cfg, train, validation):
 def require_fitting_coverage(report):
     if not report['ready']:
         raise DataCoverageError('Insufficient data before world-model fitting: ' + '; '.join(report['reasons']) +
-            '. Time limits/stuck endings are truncations, not task endings. '
+            '. Active time limits are task endings; stuck endings are truncations. '
             'Collect a fixed additional batch of independent episodes, preserving the existing splits, '
             'then run validate --for-training. No gradient updates were performed.')
 
@@ -68,11 +76,18 @@ def one_observation(observation, normalizer, device):
 
 @torch.no_grad()
 def drive_episode(env, episode_id, controller="mixed", model=None, normalizer=None, sac=None,
-                  device=None, deterministic=False, seed=None, expert_probability=None):
+                  device=None, deterministic=False, seed=None, expert_probability=None, exposure=None):
+    """Record a whole episode, preserving actions and the environment's ending labels."""
     if expert_probability is not None and (sac is None or not 0 <= expert_probability <= 1):
         raise ValueError("Expert-labelled collection requires a policy and a probability in [0, 1]")
+    if exposure is not None and sac is not None:
+        raise ValueError("Collection exposure requires a baseline controller")
     reset_started = time.monotonic()
-    observation, info = env.reset(episode_id, seed)
+    episode_seed = env.cfg.training.seed + episode_id if seed is None else seed
+    reset_args = {}
+    if exposure is not None and exposure["exposed"] and exposure["staged_hazards"]:
+        reset_args["hazard_seed"] = episode_seed
+    observation, info = env.reset(episode_id, seed, **reset_args)
     reset_seconds = time.monotonic() - reset_started
     noisy = controller == "noisy" or (controller == "mixed" and episode_id % 2 == 1)
     controller = "sac" if sac is not None else ("noisy" if noisy else "autopilot")
@@ -82,6 +97,15 @@ def drive_episode(env, episode_id, controller="mixed", model=None, normalizer=No
                 "policy_updates": 0 if sac is None else sac.updates}
     if expert_probability is not None:
         metadata.update(expert_probability=expert_probability, expert_source="BasicAgent")
+    perturbations = None
+    if exposure is not None:
+        metadata["collection_exposure"] = exposure
+        if exposure["exposed"]:
+            if exposure["staged_hazards"]:
+                exposure["hazard"] = env.staged_hazard.metadata
+            if exposure["perturbations"]:
+                perturbations = ControlPerturbations(episode_seed, env.cfg.environment.decision_dt,
+                                                    exposure["disturbances"])
     builder = EpisodeBuilder(observation, info, metadata)
     rng = np.random.default_rng(metadata["seed"] + 17)
     telemetry = EpisodeTelemetry(env, metadata)
@@ -104,6 +128,9 @@ def drive_episode(env, episode_id, controller="mixed", model=None, normalizer=No
     while True:
         if sac is None:
             requested = env.expert_action(rng if noisy else None)
+            if perturbations is not None:
+                requested = perturbations.action(requested, len(summaries),
+                                                 float(np.linalg.norm(observation.continuous[:2])))
         else:
             features = model.features(state, previous, weather)
             if env.cfg.training.policy_observation_skip:
@@ -138,18 +165,27 @@ def drive_episode(env, episode_id, controller="mixed", model=None, normalizer=No
         "success": info["terminal_reason"] == "success", "terminal_reason": info["terminal_reason"],
         "event_decision_counts": events,
         "event_totals": {name: int(np.sum(a["events"][:, i])) for i, name in enumerate(EVENTS)},
+        "terminal_count": int(a["terminated"].sum()),
+        "terminal_density": float(a["terminated"].mean()),
+        "truncated_count": int(a["truncated"].sum()),
         "collisions_per_km": events["collision"] / (distance / 1000) if distance > 0 else None,
         "mean_abs_lane_offset_m": float(np.mean([abs(item["lane_offset"]) for item in summaries])),
         "mean_abs_heading_error_rad": float(np.mean([abs(item["heading_error"]) for item in summaries]))}
     for key in ("acceleration_mps2", "jerk_mps3", "steering_rate_per_s"):
         summary["mean_" + key] = float(np.mean([item[key] for item in summaries]))
+    if exposure is not None:
+        summary["collection_exposure"] = exposure
     episode.metadata["summary"] = summary
     print(f"Episode {episode_id}: {controller}, {metadata['weather']}, {len(episode)} steps, "
           f"{info['route_completion']:.1%} route, {info['terminal_reason']}, return {summary['return']:.2f}", flush=True)
     return episode, summary
 
 
-def collect(cfg, data_path, episodes, controller="mixed", policy_checkpoint=None, expert_probability=.5):
+def collect(cfg, data_path, episodes, controller="mixed", policy_checkpoint=None, expert_probability=.5,
+            *, perturbations=False, staged_hazards=False, exposure_fraction=.8):
+    """Append all completed real episodes, with optional seeded failure exposure."""
+    options = CollectionOptions(perturbations, staged_hazards, exposure_fraction)
+    options.validate(policy_checkpoint)
     dataset = Dataset(data_path, cfg, create=True)
     policy_args = {}
     if policy_checkpoint is not None:
@@ -166,7 +202,11 @@ def collect(cfg, data_path, episodes, controller="mixed", policy_checkpoint=None
                            deterministic=True, expert_probability=expert_probability)
     with CarlaDrivingEnv(cfg) as env:
         for _ in range(episodes):
-            episode, summary = drive_episode(env, dataset.next_id(), controller, **policy_args)
+            identity = dataset.next_id()
+            exposure_args = {}
+            if perturbations or staged_hazards:
+                exposure_args["exposure"] = options.for_episode(cfg.training.seed + identity)
+            episode, summary = drive_episode(env, identity, controller, **policy_args, **exposure_args)
             if policy_checkpoint is not None:
                 episode.metadata["source_agent"] = str(policy_checkpoint)
             dataset.save(episode)
@@ -183,6 +223,9 @@ def validate_dataset(cfg, data_path):
                        for split in ("train", "validation", "test")},
             "event_decision_counts": {name: int(sum(np.sum(ep.arrays["events"][:, i] > 0) for ep in episodes))
                                       for i, name in enumerate(EVENTS)},
+            "termination_support": {split: termination_support(
+                [ep for ep in episodes if ep.metadata['split'] == split])
+                for split in ("train", "validation", "test")},
             "fitting_coverage": fitting_coverage(cfg,
                 [ep for ep in episodes if ep.metadata['split'] == 'train'],
                 validation_suite([ep for ep in episodes if ep.metadata['split'] == 'validation'], cfg))}
@@ -334,13 +377,13 @@ def fit_termination(cfg, data_path, checkpoint, output, updates=None):
 
 
 def train(cfg, data_path, output, episodes=None, model_path=None, resume=None, policy_updates=None, clock=None):
-    """SAC optimizer blocks use saved replay. CARLA exists only inside collection blocks."""
+    """Train SAC with a frozen world model; collected episodes only update real replay."""
     if episodes is not None and policy_updates is not None:
         raise ValueError("Choose --episodes or --policy-updates")
     if episodes is not None and cfg.training.collection_episodes < 1:
         raise ValueError("An episode budget requires collection_episodes > 0")
-    if clock is not None and (cfg.training.collection_episodes or cfg.training.refresh_updates):
-        raise ValueError("Timed policy training requires offline replay: set collection_episodes=0 and refresh_updates=0. "
+    if clock is not None and cfg.training.collection_episodes:
+        raise ValueError("Timed policy training requires offline replay: set collection_episodes=0. "
                          "Collect fixed batches separately before training; no CARLA client is started by timed updates.")
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
@@ -355,17 +398,21 @@ def train(cfg, data_path, output, episodes=None, model_path=None, resume=None, p
     payload, model, normalizer, optimizer = load_checkpoint(resume or model_path, cfg, device)
     if not resume and payload.get("kind") != "world_model":
         raise ValueError("--model requires a world-model checkpoint; a new SAC policy starts with fresh weights")
+    # SAC trains on detached features. Keep every model head, buffer and the saved
+    # normalizer fixed, including after collection and interrupted-run recovery.
+    model.eval()
+    model.requires_grad_(False)
     sac = SAC(policy_feature_size(model, cfg), cfg, device)
     rng = np.random.default_rng(cfg.training.seed)
     model_updates, version = payload["model_updates"], payload["model_version"]
     termination_updates = payload.get("termination_updates", 0)
     terminal_fit = payload.get("termination_fit")
     training_episodes = block_done = collection_remaining = 0
-    refresh_pending = False
+    replay_pending = False
     if resume:
         if payload.get("kind") != "agent":
             raise ValueError("--resume requires an agent checkpoint")
-        ignored = ("device", "episodes", "policy_updates")
+        ignored = ("device", "episodes", "policy_updates", "refresh_updates")
         old = {k: v for k, v in payload["config"]["training"].items() if k not in ignored}
         new = {k: v for k, v in cfg.to_dict()["training"].items() if k not in ignored}
         old.setdefault("termination_fit_updates", cfg.training.termination_fit_updates)
@@ -392,9 +439,10 @@ def train(cfg, data_path, output, episodes=None, model_path=None, resume=None, p
         training_episodes = payload["training_episodes"]
         block_done = payload["block_updates_done"]
         collection_remaining = payload["collection_remaining"]
-        refresh_pending = payload["refresh_pending"]
-        if clock is not None and (refresh_pending or collection_remaining):
-            raise ValueError("Timed offline training cannot resume pending collection or model refresh")
+        # Older checkpoints requested model fitting here. Only rebuild replay now.
+        replay_pending = payload.get("replay_pending", payload.get("refresh_pending", False))
+        if clock is not None and collection_remaining:
+            raise ValueError("Timed offline training cannot resume pending collection")
     if clock is not None:
         clock.start()
     write_json(experiment_config_path(output), cfg.to_dict())
@@ -477,28 +525,15 @@ def train(cfg, data_path, output, episodes=None, model_path=None, resume=None, p
         raise ValueError(f"Need at least {cfg.training.minimum_real_steps} real training transitions; found {len(real)}")
     real_steps = dataset.transition_count()
     report = validate()
-    # Interrupted collection is fitted first, with CARLA disconnected, before checking the gate.
-    def refresh():
-        nonlocal model_updates, termination_updates, terminal_fit, version, real, report, refresh_pending, demonstrations
-        started = time.monotonic()
-        train_data = dataset.load("train", cfg.training.replay_steps)
-        if cfg.training.refresh_updates:
-            fit_updates(model, optimizer, train_data, normalizer, cfg,
-                        cfg.training.refresh_updates, device, rng, output / "world_model_training.jsonl", model_updates)
-            model_updates += cfg.training.refresh_updates
-        terminal_fit = fit_termination_updates(model, train_data, normalizer, cfg,
-            cfg.training.termination_fit_updates, device, rng, output / "termination_training.jsonl")
-        clear_termination_moments(optimizer, model)
-        termination_updates += terminal_fit.get("updates", 0)
-        if cfg.training.refresh_updates or terminal_fit["available"]:
-            version += 1
-        timings["model_fitting_seconds"] = time.monotonic() - started
+    def refresh_replay():
+        """Encode newly collected episodes with the unchanged model and normalizer."""
+        nonlocal real, report, replay_pending, demonstrations
         real = rebuild()
         demonstrations = rebuild_demonstrations()
         report = validate()
-        refresh_pending = False
+        replay_pending = False
         passed, reason = imagination_gate(report, cfg)
-        append_json(output / "training.jsonl", {"stage": "model_refresh", "device": str(device),
+        append_json(output / "training.jsonl", {"stage": "replay_refresh", "device": str(device),
             "model_updates": model_updates, "termination_updates": termination_updates,
             "termination_fit": terminal_fit, "model_version": version, "policy_updates": sac.updates,
             "imagination_enabled": passed, "imagination_gate": reason, "timings": dict(timings)})
@@ -509,7 +544,8 @@ def train(cfg, data_path, output, episodes=None, model_path=None, resume=None, p
             training_episodes=training_episodes, real_steps=real_steps, rng=rng_state(rng), validation=report,
             validation_episode_ids=[ep.metadata["episode_id"] for ep in suite],
             termination_updates=termination_updates, termination_fit=terminal_fit,
-            block_updates_done=block_done, collection_remaining=collection_remaining, refresh_pending=refresh_pending,
+            block_updates_done=block_done, collection_remaining=collection_remaining,
+            replay_pending=replay_pending, refresh_pending=False, world_model_frozen=True,
             policy_initialization=policy_initialization,
             **({"training_clock": clock.summary(), "training_stage": stage} if clock is not None else {}))
         if clock is not None:
@@ -517,8 +553,8 @@ def train(cfg, data_path, output, episodes=None, model_path=None, resume=None, p
                 {"policy_updates": sac.updates, "model_updates": model_updates,
                  "warmup_updates": (policy_initialization or {}).get("updates", 0)}, force=force)
         timings["checkpoint_seconds"] = time.monotonic() - started
-    if refresh_pending:
-        refresh()
+    if replay_pending:
+        refresh_replay()
         if not collection_remaining:
             block_done = 0
         checkpoint()
@@ -561,7 +597,8 @@ def train(cfg, data_path, output, episodes=None, model_path=None, resume=None, p
                         "additional_policy_updates": 0, "additional_collection_episodes": 0,
                         "warmup_updates": policy_initialization["updates"], "deadline_reached": True,
                         "device": str(device)}
-    print(f"SAC device={device}; real replay={len(real)}; imagination gate passed: {gate_reason}", flush=True)
+    print(f"SAC device={device}; world model frozen; real replay={len(real)}; "
+          f"imagination gate passed: {gate_reason}", flush=True)
     write_json(experiment_config_path(output), cfg.to_dict())
     initial_updates, initial_episodes = sac.updates, training_episodes
     target_updates = initial_updates + (cfg.training.policy_updates if policy_updates is None else policy_updates)
@@ -583,12 +620,12 @@ def train(cfg, data_path, output, episodes=None, model_path=None, resume=None, p
                     real_steps += len(episode)
                     training_episodes += 1
                     collection_remaining -= 1
-                    refresh_pending = True
+                    replay_pending = True
                     checkpoint()
                     append_json(output / "training.jsonl", {**summary, "stage": "collection", "device": str(device),
                         "policy_updates": sac.updates, "real_steps": real_steps, "timings": dict(timings)})
-            # Actors have been destroyed and simulator settings restored before fitting.
-            refresh()
+            # Actors have been destroyed before encoding the newly collected replay.
+            refresh_replay()
             if not collection_remaining:
                 block_done = 0
             checkpoint()

@@ -3,11 +3,11 @@
 import torch
 from torch.nn import functional as F
 
-from .schema import CONTINUOUS, SLOTS, LIGHT_CLASSES, OBJECT_OFFSET, OBJECT_FIELDS, VEHICLE_SLOTS
+from .schema import CONTINUOUS, CONTROLS, SLOTS, LIGHT_CLASSES, OBJECT_OFFSET, OBJECT_FIELDS, VEHICLE_SLOTS
 
 
 def policy_feature_size(model, cfg):
-    extra = CONTINUOUS + SLOTS * 4 + 2 + len(LIGHT_CLASSES)
+    extra = CONTINUOUS + SLOTS * 4 + CONTROLS + len(LIGHT_CLASSES)
     return model.feature_size + (extra if cfg.training.policy_observation_skip else 0)
 
 
@@ -55,7 +55,7 @@ def predicted_observation(prediction, applied, weather, normalizer):
     present = prediction["present"].sigmoid() >= .5
     controls = prediction["controls"].sigmoid() >= .5
     # Absent dimensions have the same zero-masked representation as real observations.
-    continuous[:, 14:16] *= controls
+    continuous[:, 14:15] *= controls
     continuous[:, 30:] *= present.repeat_interleave(7, -1)
     return {"continuous": continuous, "present": present,
             "classes": prediction["classes"].argmax(-1), "controls": controls,
@@ -67,7 +67,7 @@ def physical_observation(obs, normalizer):
                   obs['continuous'].new_tensor(normalizer.mean))
     continuous[..., OBJECT_OFFSET:] = continuous[..., OBJECT_OFFSET:].masked_fill(
         ~obs['present'].bool().repeat_interleave(len(OBJECT_FIELDS), -1), 0)
-    continuous[..., 14:16] = continuous[..., 14:16].masked_fill(~obs['controls'].bool(), 0)
+    continuous[..., 14:15] = continuous[..., 14:15].masked_fill(~obs['controls'].bool(), 0)
     return {**obs, 'continuous': continuous}
 
 
@@ -78,6 +78,6 @@ def current_policy_observation(features, cfg, normalizer):
     controls = CONTINUOUS + SLOTS * 4
     obs = {'continuous': skip[:, :CONTINUOUS],
         'present': skip[:, CONTINUOUS:CONTINUOUS + SLOTS].bool(),
-        'controls': skip[:, controls:controls + 2].bool(),
-        'light': skip[:, controls + 2:].argmax(-1)}
+        'controls': skip[:, controls:controls + CONTROLS].bool(),
+        'light': skip[:, controls + CONTROLS:].argmax(-1)}
     return physical_observation(obs, normalizer)

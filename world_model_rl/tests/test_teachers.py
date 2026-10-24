@@ -19,7 +19,7 @@ def observation_sequence():
     c[:, 10:14] = [1, 14, 12, 100]
     c[:, 20:OBJECT_OFFSET] = np.array([[5, 0], [10, 0], [20, 0], [30, 0], [40, 0]]).ravel()
     return {'continuous': c, 'present': np.zeros((2, SLOTS), bool),
-            'classes': np.zeros((2, SLOTS), np.int64), 'controls': np.zeros((2, 2), bool),
+            'classes': np.zeros((2, SLOTS), np.int64), 'controls': np.zeros((2, 1), bool),
             'light': np.zeros(2, np.int64)}
 
 

@@ -5,7 +5,7 @@ import numpy as np
 
 from .schema import EVENTS
 
-REWARD_VERSION = "decision-comfort-v2"
+REWARD_VERSION = "decision-comfort-v3"
 
 
 def learning_reward_contract(cfg):
@@ -84,7 +84,7 @@ class RewardCalculator:
         components = {
             "progress": w.progress * after["progress_distance"], "success": w.success * events["success"],
             "collision": -w.collision * events["collision"], "red_light": -w.red_light * events["red_light"],
-            "stop_sign": -w.stop_sign * events["stop_sign"], "illegal_lane": -w.illegal_lane * events["illegal_lane"],
+            "time_limit": -w.time_limit * events["time_limit"], "illegal_lane": -w.illegal_lane * events["illegal_lane"],
             "offroad": -w.offroad * dt * events["offroad"], "wrong_way": -w.wrong_way * dt * events["wrong_way"],
             "speeding": -w.speeding * dt * speeding ** 2,
             "unsafe_child": -w.unsafe_child * dt * child_excess ** 2,

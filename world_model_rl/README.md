@@ -2,6 +2,29 @@
 
 Point-to-point driving in Town01 using structured CARLA observations, masked attention,
 a Gaussian RSSM with GRU memory, and SAC with real and validated imagined transitions.
+
+The current contract is `carla-structured-v2` with `decision-comfort-v3` rewards.
+`environment.max_steps` counts active driving decisions. Stopped waits in the
+0–5 m area before a relevant red/yellow line pause the deadline; green lights and
+early stops spend it. Expiry ends the task with `-reward.time_limit` (default 100).
+Observation index 15 is remaining active seconds, and traffic light presence has
+one mask. Geometric V3/V4 teachers decelerate toward a 2.5 m front-bumper margin;
+the former V4 blanket 25 m braking rule is removed.
+
+These changes require fresh compatible recordings, a new training-only normalizer,
+attention/RSSM and prediction heads, then new SAC actor/critics. Old experiment
+artifacts remain historical and cannot be loaded directly into this contract.
+Generate a current default configuration and start a fresh run when ready:
+
+```bash
+venv/bin/python -c 'from world_model_rl.config import Config; from world_model_rl.data import write_json; write_json("runs/light_deadline_v2/config.json", Config().to_dict())'
+venv/bin/python -m world_model_rl run --config runs/light_deadline_v2/config.json --output runs/light_deadline_v2/training
+```
+
+The stopping geometry and future CV provider interface are described in
+[DESIGN.md](DESIGN.md). Historical profiles below describe earlier experiment
+artifacts; their saved configurations and datasets require explicit conversion
+before reuse. The code update does not launch training.
 [
 
 
@@ -40,8 +63,8 @@ At the default configuration, a fresh run:
 3. Saves `world_model.pt` and evaluates a held-out prediction/termination suite.
 4. If validation passes, initializes fresh SAC actor/critics/optimizers and performs
    100,000 policy updates in 10,000-update blocks, using 75% real and 25% imagined replay.
-5. Between policy blocks, collects two episodes using the current SAC actor, refreshes
-   the world model, rebuilds latent replay, and validates before further SAC updates.
+5. Between policy blocks, collects two episodes using the current SAC actor,
+   rebuilds latent replay with the frozen world model, and validates before further SAC updates.
 
 `run` requires a new or empty output directory and at least ten bootstrap episodes.
 It never reuses data or weights from an existing experiment. The configuration is saved
@@ -181,8 +204,8 @@ These are diagnostic contexts, not demonstrated causes or permission to fit on v
 Before fitting, `validate --for-training` checks recorded task-ending/nonterminal
 support in training and the first up to `training.validation_episodes` validation
 episodes. `fit` performs the same check before allocating a model and writes
-`CHECKPOINT.coverage.json`. Time-limit and stuck truncations count as nonterminal
-transitions; only true task terminations (such as success or collision) are positives.
+`CHECKPOINT.coverage.json`. Stuck truncations count as nonterminal transitions;
+task terminations, including active timeouts, success and collision, are positives.
 The check preserves all split assignments and does not select episodes by outcome.
 Adequate label support alone does not establish prediction quality; the later model
 validation gate remains required.
@@ -251,8 +274,8 @@ venv/bin/python -m world_model_rl evaluate --config runs/manual/config.json --ch
 
 `data/` stores numeric NPZ episodes, provenance and fixed episode splits. `world_model.pt`
 stores the initial fitted model, optimizer and normalizer; `agent.pt` also contains SAC
-state and the latest refreshed model. `training.jsonl`, `world_model_training.jsonl`,
-and `termination_training.jsonl` record update counters, fitting metrics and timings.
+state and the same frozen model. `training.jsonl` records policy progress and replay
+rebuilds. Explicit fitting uses `world_model_training.jsonl` and `termination_training.jsonl`.
 The launcher's sibling `.log` contains collection summaries and printed stage progress.
 No automatic completion notification is configured.
 
@@ -308,7 +331,7 @@ New **optional training** settings (package defaults in parentheses) are:
 | `red_light_objective_multiplier` (1) | 10 | Learning penalty 200 instead of recorded 20 per red crossing. |
 | `collision_objective_multiplier` (1) | 5 | Learning penalty 500 instead of recorded 100 per collision. |
 | `gamma` (0.99) | 0.997 | About 33 simulated seconds of discounted horizon at 10 Hz. |
-| `behavior_cloning_teacher` (`recorded`) | `geometry_v4` | Calibrated v3 plus consistent training-only red/yellow braking inside 25 m. |
+| `behavior_cloning_teacher` (`recorded`) | `geometry_v4` | Historical profile used blanket 25 m braking; current V4 uses V3's distance-based approach and hold. |
 | `behavior_cloning_applied_weight` (0) | 2 | Add shared-adapter applied-action MSE to request MSE in warm-up and SAC anchoring. |
 | `behavior_cloning_permute_objects` (false) | true | Train with scene-preserving within-class current-slot permutations. |
 | `deterministic_algorithms` (false) | true | Strict PyTorch deterministic checks; CUDA BLAS workspace and cuDNN settings are fixed. |
@@ -399,8 +422,8 @@ the clock never interrupts an optimizer half way through. Prediction validation
 and driving evaluation may run after training stops. A failed imagination gate
 still blocks SAC; the deadline does not create a real-only fallback.
 
-Timed policy training requires explicit `collection_episodes=0` and
-`refresh_updates=0`, with no pending collection/refresh phase. Collect real data
+Timed policy training requires explicit `collection_episodes=0`, with no pending
+collection phase. The legacy `refresh_updates` setting is ignored. Collect real data
 in fixed batches separately. Timed replay updates never connect to CARLA. The
 clock options apply to individual `fit`/`train` stages, not the integrated `run`
 command. This is an explicit offline training profile, not a change to package
@@ -565,6 +588,7 @@ dataset if necessary, or append episodes with new IDs to a compatible existing d
 venv/bin/python -m world_model_rl collect [--config PATH] [--data DIR]
     [--episodes N] [--controller {mixed,autopilot,noisy}]
     [--policy-checkpoint FILE] [--expert-probability P]
+    [--perturbations] [--staged-hazards] [--exposure-fraction P]
 ```
 
 | Option | Default | Meaning |
@@ -575,10 +599,63 @@ venv/bin/python -m world_model_rl collect [--config PATH] [--data DIR]
 | `--controller MODE` | `mixed` | `autopilot`: BasicAgent expert; `noisy`: expert with action noise; `mixed`: expert on even episode IDs and noisy expert on odd IDs. |
 | `--policy-checkpoint FILE` | None | Agent for expert-labelled mixed policy collection. Replaces controller mode; deterministic policy/expert execution is selected independently per decision. |
 | `--expert-probability P` | `0.5` | Expert execution probability for labelled policy collection, in `[0,1]`. Every decision still receives a separate expert action label. |
+| `--perturbations` | Off | Add repeated sustained steering or acceleration disturbances during exposed episodes. |
+| `--staged-hazards` | Off | Add one parked vehicle, adult crossing, or child crossing during exposed episodes. |
+| `--exposure-fraction P` | `0.8` | Probability that an episode uses the enabled exposure options, in `[0,1]`. |
 
 Here `autopilot` names the package's BasicAgent controller. It is not a request to
 enable Traffic Manager autopilot on the ego vehicle. Mixed collection uses absolute
 dataset episode IDs, so alternation continues when appending.
+
+The exposure options are independent. With both enabled, the same exposed episodes
+receive both perturbations and hazards; the remaining episodes use the selected
+baseline controller. The default is an 80% exposure probability, not a guaranteed
+episode proportion or termination rate. Choices use each episode's seed, so
+appending and restarting do not restart the exposure schedule. These options apply
+only to explicit `collect`, and cannot be combined with `--policy-checkpoint`.
+
+Perturbations start after 3 to 8 simulated seconds and last 2 to 5 seconds, with
+3 to 8 seconds of baseline recovery between them. Steering disturbances choose
+left or right with magnitude 0.35 to 0.9; acceleration disturbances retain baseline
+steering. All disturbances request throttle 0.5 to 1.0 and suppress braking. Below
+2 m/s, only acceleration disturbances start. The usual action rate limits still
+apply, and requested and applied actions are both recorded.
+
+Staged hazards sample equally among parked vehicles, adults, and children. They
+use a non-junction route segment 20 to 50 metres ahead, with varied models and
+offsets. Pedestrians wait beside the road, then cross at 0.8 to 1.8 m/s when the
+ego approaches within 8 to 20 metres. Each hazard is one additional real actor
+beyond the configured background actor budgets, including when those budgets are
+zero. Placement checks ground and actor clearance; after 20 unsuccessful candidate
+placements collection raises an error. Fixed routes shorter than 30 metres cannot
+support staging. All staged actors are cleaned up with the episode.
+
+Neither option changes rewards or termination labels. Actual collisions, sustained
+off-road driving, success, and active time limits remain terminal; stuck endings
+remain truncations. All completed episodes are retained, including avoided hazards
+and recoveries. `collection_exposure` in episode metadata and `collection.jsonl`
+records the options, exposure choice, realized disturbance steps, hazard placement,
+and crossing trigger. Existing observation and action arrays keep their schema.
+
+Append a fixed batch to a compatible dataset and inspect its coverage:
+
+```bash
+venv/bin/python -m world_model_rl collect \
+  --config runs/manual/config.json --data runs/manual/data \
+  --episodes 40 --perturbations --staged-hazards
+
+venv/bin/python -m world_model_rl validate \
+  --config runs/manual/config.json --data runs/manual/data --for-training
+```
+
+Use either flag alone to enable just that exposure type. Exposure does not change
+the saved split assignments. `termination_support` reports terminal density,
+truncations, and ending reasons across every split, while `fitting_coverage`
+reports the actual training and fixed validation episodes used by fitting.
+Appending data may leave new validation episodes outside the existing cap of
+`training.validation_episodes`; inspect the reported IDs before fitting. To expand
+that cap, increase it explicitly in the configuration before a fresh fit, without
+selecting episodes by their outcomes.
 
 ```bash
 venv/bin/python -m world_model_rl collect \
@@ -619,7 +696,7 @@ venv/bin/python -m world_model_rl validate \
 ```
 
 **Output:** stdout JSON with episode/transition totals, split counts,
-`event_decision_counts`, and `fitting_coverage`. The command does not save a report
+`event_decision_counts`, `termination_support`, and `fitting_coverage`. The command does not save a report
 file itself. To retain the JSON, redirect stdout to a file in an existing directory:
 
 ```bash
@@ -740,7 +817,7 @@ venv/bin/python -m world_model_rl evaluate-model [--config PATH] [--data DIR]
 | --- | --- | --- |
 | `--config PATH` | Packaged config | Must match the checkpoint and dataset. |
 | `--data DIR` | `runs/default/data` | Existing dataset containing the selected split. |
-| `--checkpoint FILE` | **Required** | A world-model or agent checkpoint; agent checkpoints contain the latest refreshed model. |
+| `--checkpoint FILE` | **Required** | A world-model or agent checkpoint; agent checkpoints contain the frozen model used by SAC. |
 | `--split SPLIT` | `test` | Select `validation` or `test`; there is no training-split option. |
 | `--output FILE` | `runs/default/test_model.json` | Destination report file; an existing report is replaced. |
 
@@ -814,10 +891,13 @@ venv/bin/python -m world_model_rl train \
 **Behavior:** encode real training replay, evaluate the fixed validation suite,
 and require the imagination gate before policy updates or collection. The default
 schedule performs 10,000-update policy blocks, then collects two SAC episodes,
-refreshes the model with 200 joint updates plus termination fitting, rebuilds
-replay, and validates again. An update budget can finish before another collection
-block; an episode budget includes the intervening optimizer blocks and model
-refreshes. Replay optimizer blocks themselves do not connect to CARLA.
+rebuilds replay using the frozen world model, and validates again. Neither joint
+RSSM fitting nor termination-head fitting occurs during SAC, even when an older
+configuration has a positive `refresh_updates` value. All model parameters,
+normalization, model versions, and model/termination update counters stay fixed.
+An update budget can finish before another collection block; an episode budget
+includes the intervening optimizer blocks and replay rebuilds. Replay optimizer
+blocks themselves do not connect to CARLA.
 
 With defaults, SAC batches use 75% real and 25% imagined transitions. Imagination
 is refreshed every 100 optimizer updates and spans one decision (`0.1` simulated
@@ -833,13 +913,16 @@ table below and PROTOTYPE.md for the exact loss and candidate 008 settings.
 
 **Resume requirements:** restore networks, optimizers, RNG state, model version,
 and phase counters. Environment/reward/model configuration must match; training
-settings must match apart from device and update budgets. The dataset's next
+settings must match apart from device, update budgets, and the ignored legacy
+`refresh_updates` value. Old checkpoints with `refresh_pending=true` rebuild replay
+without fitting the model. New checkpoints record `replay_pending`,
+`world_model_frozen=true`, and `refresh_pending=false`. The dataset's next
 episode ID must match the checkpoint frontier. Do not append episodes separately
 to a dataset that belongs to a resumable agent. An unfinished, unsaved simulator
 episode restarts from its seed; partial simulator state is not restored.
 
-**Output:** `agent.pt`, `config.json`, `validation.json`, `training.jsonl`,
-and fitting/termination logs when refreshes occur. The dataset remains at
+**Output:** `agent.pt`, `config.json`, `validation.json`, and `training.jsonl`.
+SAC creates no world-model or termination fitting logs. The dataset remains at
 `--data`; setting `--output` does **not** change `--data`. A fresh `train` refuses
 an output containing `agent.pt`; it can use the directory containing the initial
 world model. Resume updates the agent checkpoint at `--output/agent.pt`.
@@ -1111,17 +1194,18 @@ The settings most directly related to command behavior are:
 | `environment.timeout` | `30.0` seconds | Driving/inspect client timeout; viewer uses its own timeout. |
 | `environment.town` | `Town01` | Map loaded by driving sessions if needed. |
 | `environment.fixed_delta_seconds` / `action_repeat` | `0.05` / `2` | One decision spans `0.1` simulated seconds. |
-| `environment.max_steps` | `1800` | Maximum decisions per episode before time-limit truncation. |
+| `environment.max_steps` | `1800` | Active decisions before timeout task failure; legitimate waits at lights pause this budget. |
+| `reward.time_limit` | `100.0` | One final negative cost on active deadline expiry. |
 | `environment.no_rendering_mode` | `false` | Disable viewport drawing for structured ground-truth runs; camera providers require rendering. Prior settings are restored on close. |
 | `training.seed` | `20261016` | Seeds collection, training, and fixed dataset split assignments. |
 | `training.device` | `auto` | CUDA when available, otherwise CPU; `cpu` forces CPU and `cuda` requires CUDA. |
 | `training.bootstrap_episodes` | `20` | Default standalone collection count and fresh `run` bootstrap count. |
 | `training.pretrain_updates` | `10000` | Default joint updates in `fit` and fresh `run`. |
-| `training.termination_fit_updates` | `2000` | Readout updates after fitting/refreshes and default for `fit-termination`. |
+| `training.termination_fit_updates` | `2000` | Readout updates after explicit model fitting and default for `fit-termination`; unused by SAC. |
 | `training.policy_updates` | `100000` | Default additional SAC update budget for direct `train`/`run`. |
 | `training.policy_block_updates` | `10000` | SAC updates between collection phases. |
 | `training.collection_episodes` | `2` | SAC episodes collected per collection phase; must be positive for an episode budget. |
-| `training.refresh_updates` | `200` | Joint model updates after a policy collection phase. |
+| `training.refresh_updates` | `0` | Deprecated compatibility field; accepted from saved configs but ignored during SAC. |
 | `training.minimum_real_steps` | `500` | Minimum real training transitions for fitting/SAC. |
 | `training.replay_steps` | `100000` | Recent real training replay budget, loaded as whole episodes. |
 | `training.synthetic_fraction` | `0.25` | Fraction of SAC samples from imagined replay. |
@@ -1161,10 +1245,10 @@ Two different checks govern training:
    `fit` performs it before gradients.
 2. **Prediction gate:** held-out normalized prediction, reward, speed, lane,
    heading, and termination metrics must pass before SAC updates or additional
-   SAC collection. The same fixed suite is retained across refreshes and resume.
+   SAC collection. The same fixed suite is retained across replay rebuilds and resume.
 
-Time-limit and stuck endings are truncations and count as nonterminal labels.
-True task terminations, including success or collision, supply positive labels.
+Stuck endings are truncations and count as nonterminal labels. Active deadline
+expiry, success, collision and off-road termination supply positive task-ending labels.
 Whole episodes receive fixed seeded 8/1/1 train/validation/test assignments per
 complete block of ten IDs; commands do not move episodes to improve coverage.
 
@@ -1212,14 +1296,14 @@ For a complete `run --output runs/experiment`, the principal artifacts are:
 | `data/episode_XXXXXX.npz` / `.json` | Numeric trajectory and its provenance/summary metadata. |
 | `data/splits.json` | Whole-episode split membership. |
 | `data/collection.jsonl` | Expert bootstrap/standalone collection summaries. SAC collection is logged in `training.jsonl`. |
-| `world_model.pt` | Initial fitted world model; SAC refreshes are stored in `agent.pt`. |
+| `world_model.pt` | Initial fitted world model, kept frozen throughout SAC. |
 | `world_model.coverage.json` | Pre-fit label and transition support. |
 | `world_model.validation.json` | Initial fitted model evaluation. |
-| `agent.pt` | Latest SAC state, refreshed world model, optimizer/RNG state, and resume counters. |
+| `agent.pt` | Latest SAC state, frozen world model, optimizer/RNG state, and resume counters. |
 | `validation.json` | Most recent SAC validation report, including one that blocks training. |
-| `training.jsonl` | SAC progress, collection summaries, model refreshes, and timings. |
-| `world_model_training.jsonl` | Joint initial fitting/refresh progress. |
-| `termination_training.jsonl` | Termination fitting/refresh progress. |
+| `training.jsonl` | SAC progress, collection summaries, replay rebuilds, and timings. |
+| `world_model_training.jsonl` | Explicit joint model fitting progress. |
+| `termination_training.jsonl` | Explicit termination fitting progress. |
 
 The launchers additionally write `OUTPUT_DIR.log` **beside** the output directory.
 Direct Python commands do not create that terminal transcript automatically.

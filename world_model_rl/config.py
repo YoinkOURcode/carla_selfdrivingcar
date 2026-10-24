@@ -30,7 +30,7 @@ class EnvironmentConfig:
         "ClearNoon", "HardRainNoon", "ClearNight", "HardRainNight", "FogNight"])
     fixed_delta_seconds: float = 0.05
     action_repeat: int = 2
-    max_steps: int = 1800
+    max_steps: int = 1800  # Active decisions; legitimate waits at lights pause this budget.
     stuck_seconds: float = 60.0
     offroad_seconds: float = 2.0
     start_spawn: int | None = None
@@ -61,11 +61,11 @@ class EnvironmentConfig:
 
 @dataclass
 class RewardConfig:
-    progress: float = 2.0
-    success: float = 100.0
-    collision: float = 100.0
+    progress: float = 0.75
+    success: float = 400.0
+    collision: float = 400.0
     red_light: float = 20.0
-    stop_sign: float = 10.0
+    time_limit: float = 400.0
     illegal_lane: float = 3.0
     offroad: float = 10.0
     wrong_way: float = 5.0
@@ -105,7 +105,7 @@ class TrainingConfig:
     policy_updates: int = 100000
     policy_block_updates: int = 10000
     collection_episodes: int = 2
-    refresh_updates: int = 200
+    refresh_updates: int = 0  # Legacy setting accepted for saved configs; SAC never fits the model.
     replay_steps: int = 100000
     batch_size: int = 256
     minimum_real_steps: int = 500
@@ -214,10 +214,10 @@ class Config:
         if t.termination_context_skip and (not t.policy_observation_skip or m.deterministic + m.stochastic < 23):
             raise ValueError("Termination context skip requires the policy observation skip and at least 23 latent dimensions")
         if t.termination_observation_skip and (not t.policy_observation_skip or
-                t.termination_context_skip or m.deterministic + m.stochastic < 126):
-            raise ValueError("Termination observation skip requires policy skip, 126 latent dimensions, and no context-only skip")
-        if t.termination_factorized and (not t.termination_observation_skip or t.refresh_updates):
-            raise ValueError('Factorized event readouts require the observation skip and a frozen world-model body')
+                t.termination_context_skip or m.deterministic + m.stochastic < 125):
+            raise ValueError("Termination observation skip requires policy skip, 125 latent dimensions, and no context-only skip")
+        if t.termination_factorized and not t.termination_observation_skip:
+            raise ValueError('Factorized event readouts require the observation skip')
         if not 0 < t.synthetic_fraction <= 0.5 or int(t.batch_size * t.synthetic_fraction) < 1 or not 0 < t.gamma < 1 or not 0 < t.tau <= 1:
             raise ValueError("Invalid synthetic fraction, gamma or tau")
         if min(t.pretrain_updates, t.refresh_updates, t.bootstrap_episodes,

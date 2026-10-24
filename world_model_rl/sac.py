@@ -184,8 +184,7 @@ class Demonstrations(Replay):
         if teacher != "recorded":
             from .teachers import geometry_actions
             self.arrays["actions"] = np.concatenate([geometry_actions(ep.arrays, calibrated=teacher in ("geometry_v2", "geometry_v3", "geometry_v4"),
-                                                                     hold_stops=teacher in ("geometry_v3", "geometry_v4"),
-                                                                     early_light_hold=teacher == "geometry_v4")
+                                                                     hold_stops=teacher in ("geometry_v3", "geometry_v4"))
                                                    for ep in episodes])
         else:
             self.arrays["actions"] = np.concatenate([

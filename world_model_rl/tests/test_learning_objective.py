@@ -48,16 +48,18 @@ def test_model_with_a_different_learning_reward_contract_cannot_be_substituted(c
         load_checkpoint(path, cfg, 'cpu')
 
 
-def test_v4_labels_brake_consistently_near_red_and_release_on_green(cfg):
-    ep = make_episode(cfg, steps=3)
-    ep.arrays['continuous'][:, 0] = [2, 0, 0, 0]
-    ep.arrays['continuous'][:, 14] = [15, 5, 5, 5]
+def test_v4_approaches_the_line_holds_at_the_margin_and_releases_on_green(cfg):
+    ep = make_episode(cfg, steps=6)
+    ep.arrays['continuous'][:, 0] = [2, 0, 12, 0, 0, 0, 0]
+    ep.arrays['continuous'][:, 14] = [15, 5, 15, 2.5, 2.5, 2.5, 2.5]
     ep.arrays['controls'][:, 0] = True
-    ep.arrays['light'][:] = [2, 2, 4, 4]
-    labels = geometry_actions(ep.arrays, calibrated=True, hold_stops=True, early_light_hold=True)
-    assert labels[0, 1] == labels[1, 1] == 0
-    assert labels[0, 2] >= .6 - 1e-6 and labels[1, 2] >= .35 - 1e-6
-    assert labels[2, 1] > 0 and labels[2, 2] == 0
+    ep.arrays['present'][:] = False
+    ep.arrays['light'][:] = [2, 2, 2, 2, 3, 4, 4]
+    labels = geometry_actions(ep.arrays, calibrated=True, hold_stops=True)
+    assert np.all(labels[:2, 1] > 0) and np.all(labels[:2, 2] == 0)
+    assert labels[2, 1] == 0 and labels[2, 2] > 0
+    assert np.all(labels[3:5, 1] == 0) and np.all(labels[3:5, 2] >= .35 - 1e-6)
+    assert labels[5, 1] > 0 and labels[5, 2] == 0
 
 
 def test_applied_control_cloning_penalizes_throttle_brake_cancellation(cfg):

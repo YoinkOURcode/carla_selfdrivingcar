@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 
 
-SCHEMA_VERSION = "carla-structured-v1"
+SCHEMA_VERSION = "carla-structured-v2"
 WAYPOINTS = 5
 VEHICLE_SLOTS = 6
 PEDESTRIAN_SLOTS = 6
@@ -17,24 +17,28 @@ CONTEXT_FIELDS = (
     "left_acceleration_mps2", "left_yaw_rate_radps", "previous_steering",
     "previous_throttle", "previous_brake", "lane_offset_left_m", "heading_error_sin",
     "heading_error_cos", "speed_limit_mps", "cautious_target_speed_mps",
-    "route_remaining_m", "light_distance_m", "stop_sign_distance_m",
+    "route_remaining_m", "light_distance_m", "time_remaining_s",
     "rain_percent", "wetness_percent", "fog_percent", "sun_altitude_degrees")
 CONTEXT = len(CONTEXT_FIELDS)
 OBJECT_OFFSET = CONTEXT + 2 * WAYPOINTS
 CONTINUOUS = OBJECT_OFFSET + SLOTS * len(OBJECT_FIELDS)
 LIGHT_CLASSES = ("none", "unknown", "red", "yellow", "green")
 OBJECT_CLASSES = ("vehicle", "adult", "child")
+CONTROL_FIELDS = ("traffic_light",)
+CONTROLS = len(CONTROL_FIELDS)
 OBS_KEYS = ("continuous", "present", "classes", "controls", "light", "ids")
-EVENTS = ("collision", "red_light", "stop_sign", "illegal_lane", "offroad", "wrong_way",
-          "unsafe_child", "unsafe_weather", "success")
+EVENTS = ("collision", "red_light", "illegal_lane", "offroad", "wrong_way",
+          "unsafe_child", "unsafe_weather", "success", "time_limit")
 
 
 def schema_description():
+    """Describe the versioned numeric observation and event layout saved with artifacts."""
     return {"version": SCHEMA_VERSION, "frame": "x forward, y left; SI units; radians except sun altitude",
             "context": list(CONTEXT_FIELDS), "waypoint_distances_m": [5, 10, 20, 30, 40],
             "waypoint_fields": ["forward_m", "left_m"], "vehicle_slots": VEHICLE_SLOTS,
             "pedestrian_slots": PEDESTRIAN_SLOTS, "object_fields": list(OBJECT_FIELDS),
             "light_classes": list(LIGHT_CLASSES), "object_classes": list(OBJECT_CLASSES),
+            "control_presence_fields": list(CONTROL_FIELDS), "events": list(EVENTS),
             "actions": ["steering [-1,1]", "throttle [0,1]", "brake [0,1]"],
             "identities": "numeric metadata only; no hashes; -1 means absent"}
 
@@ -51,7 +55,7 @@ class Observation:
     @classmethod
     def empty(cls):
         return cls(np.zeros(CONTINUOUS, np.float32), np.zeros(SLOTS, bool),
-                   np.zeros(SLOTS, np.int64), np.zeros(2, bool), np.array(0, np.int64),
+                   np.zeros(SLOTS, np.int64), np.zeros(CONTROLS, bool), np.array(0, np.int64),
                    np.full(SLOTS, -1, np.int64))
 
     def arrays(self):
@@ -59,7 +63,7 @@ class Observation:
 
     def validate(self):
         shapes = {"continuous": (CONTINUOUS,), "present": (SLOTS,), "classes": (SLOTS,),
-                  "controls": (2,), "light": (), "ids": (SLOTS,)}
+                  "controls": (CONTROLS,), "light": (), "ids": (SLOTS,)}
         for name, shape in shapes.items():
             value = np.asarray(getattr(self, name))
             if value.shape != shape or not np.isfinite(value).all():
@@ -81,9 +85,10 @@ class Observation:
 
 
 def continuous_valid(present, controls):
+    """Mask absent geometry while retaining the episode clock in every observation."""
     shape = (*present.shape[:-1], CONTINUOUS)
     valid = np.ones(shape, bool)
-    valid[..., 14:16] = controls
+    valid[..., 14:15] = controls
     valid[..., OBJECT_OFFSET:] = np.repeat(present, len(OBJECT_FIELDS), axis=-1)
     return valid
 

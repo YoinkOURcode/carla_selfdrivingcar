@@ -206,7 +206,53 @@ def test_short_failure_episodes_are_trained_and_padding_is_ignored(cfg):
     assert torch.isfinite(original)
 
 
-def test_sac_targets_bootstrap_time_limits_and_stop_at_task_termination(cfg):
+def test_frozen_world_model_rewards_reach_trainable_sac(cfg):
+    """Imagined rewards influence critic gradients while SAC and targets keep updating."""
+    episode = make_episode(cfg)
+    normalizer = Normalizer.fit([episode])
+    model = RSSM(cfg.model).eval().requires_grad_(False)
+    with torch.no_grad():
+        model.reward_head[-1].weight.zero_()
+        model.reward_head[-1].bias.fill_(-10)
+    alternate = copy.deepcopy(model)
+    alternate.reward_head[-1].bias.fill_(10)
+    real = real_replay([episode], model, normalizer, 'cpu', 1)
+    sac = SAC(model.feature_size, cfg, 'cpu')
+    alternate_sac = copy.deepcopy(sac)
+    model_before = {key: value.clone() for key, value in model.state_dict().items()}
+    before = {name: [p.detach().clone() for p in getattr(sac, name).parameters()]
+              for name in ('actor', 'q1', 'q2', 'target1', 'target2')}
+    alpha_before = sac.log_alpha.detach().clone()
+    torch.manual_seed(77)
+    synthetic, counts = imagine(model, sac, real, normalizer, cfg, 'cpu', np.random.default_rng(12))
+    torch.manual_seed(77)
+    alternative, _ = imagine(alternate, alternate_sac, real, normalizer, cfg, 'cpu', np.random.default_rng(12))
+    assert counts['accepted'] > 0
+    np.testing.assert_array_equal(synthetic.arrays['rewards'], -10)
+    np.testing.assert_array_equal(alternative.arrays['rewards'], 10)
+    for key in synthetic.arrays.keys() - {'rewards'}:
+        np.testing.assert_array_equal(synthetic.arrays[key], alternative.arrays[key])
+    assert torch.is_grad_enabled()  # The imagination decorator does not wrap optimization.
+    batch = mixed_batch(real, synthetic, cfg.training.batch_size, cfg.training.synthetic_fraction,
+                        np.random.default_rng(2))
+    alternative_batch = mixed_batch(real, alternative, cfg.training.batch_size, cfg.training.synthetic_fraction,
+                                    np.random.default_rng(2))
+    assert np.count_nonzero(batch['rewards'] == -10) == int(cfg.training.batch_size * cfg.training.synthetic_fraction)
+    torch.manual_seed(99)
+    sac.update(batch)
+    torch.manual_seed(99)
+    alternate_sac.update(alternative_batch)
+    assert any(not torch.equal(a.grad, b.grad) for a, b in zip(sac.q1.parameters(), alternate_sac.q1.parameters()))
+    for name, previous in before.items():
+        network = getattr(sac, name)
+        assert any(not torch.equal(a, b) for a, b in zip(previous, network.parameters())), name
+        assert all(p.requires_grad == (not name.startswith('target')) for p in network.parameters())
+    assert not torch.equal(alpha_before, sac.log_alpha) and sac.log_alpha.requires_grad
+    assert all(torch.equal(value, model.state_dict()[key]) for key, value in model_before.items())
+    assert all(p.grad is None and not p.requires_grad for p in model.parameters())
+
+
+def test_sac_targets_bootstrap_truncations_and_stop_at_task_termination(cfg):
     sac = SAC(5, cfg, "cpu")
     for net in (sac.q1, sac.q2, sac.target1, sac.target2):
         for parameter in net.parameters():
@@ -259,7 +305,7 @@ def test_imagination_never_observes_future_and_horizon_does_not_create_terminal(
     assert len(batch["rewards"]) == 8
     with pytest.raises(ValueError, match="different representation"):
         mixed_batch(real, Replay(synthetic.arrays, 6), 8, 0.25, np.random.default_rng(0))
-    assert not real.arrays["terminated"].any()  # The fixture ends by time limit.
+    assert not real.arrays["terminated"].any()  # The fixture represents a stuck truncation.
 
 
 def test_validation_reports_event_support_and_blocks_unsupported_imagination(cfg):
@@ -360,6 +406,7 @@ def test_environment_preserves_fixed_dt_and_collision_overrides_goal_reward(cfg)
                              bounding_box=SimpleNamespace(extent=SimpleNamespace(x=2)))
     env.previous_action = np.zeros(3, np.float32)
     env.steps, env.frame, env.sim_time, env.committed_frame = 0, 0, 0.0, 0
+    env.active_steps = 0
     env.stuck_time = env.offroad_time = 0.0
     env.ended, env.controls = False, []
     env.route = SimpleNamespace(high_water=1, length=10)
@@ -392,7 +439,7 @@ def test_environment_preserves_fixed_dt_and_collision_overrides_goal_reward(cfg)
         env.step([0, 0, 1])
 
 
-def test_orchestration_refresh_resume_and_evaluation_with_offline_env_only(cfg, tmp_path, monkeypatch):
+def test_orchestration_frozen_model_resume_and_evaluation_with_offline_env_only(cfg, tmp_path, monkeypatch):
     from world_model_rl import runner
     cfg.training.bootstrap_episodes = 10
     cfg.training.pretrain_updates = 1
@@ -440,11 +487,11 @@ def test_orchestration_refresh_resume_and_evaluation_with_offline_env_only(cfg, 
     output = tmp_path / "run"
     runner.run(cfg, output, episodes=2)
     first, _, norm, _ = load_checkpoint(output / "agent.pt", cfg, "cpu")
-    assert first["training_episodes"] == 2 and first["model_version"] == 2
+    assert first["training_episodes"] == 2 and first["model_version"] == 1
     assert first["termination_fit"] == first["validation"]["termination_fit"]
     runner.run(cfg, output, episodes=1, resume=True)
     second, _, norm_after, _ = load_checkpoint(output / "agent.pt", cfg, "cpu")
-    assert second["next_episode_id"] == 13 and second["model_version"] == 3
+    assert second["next_episode_id"] == 13 and second["model_version"] == 1
     assert second["sac"]["updates"] == 6
     recorded = Dataset(output / "data", cfg).load()
     assert [ep.metadata["policy_updates"] for ep in recorded[-3:]] == [3, 3, 6]
@@ -452,10 +499,15 @@ def test_orchestration_refresh_resume_and_evaluation_with_offline_env_only(cfg, 
     result = runner.run(cfg, output, policy_updates=2, resume=True)
     third, _, _, _ = load_checkpoint(output / "agent.pt", cfg, "cpu")
     assert result["additional_policy_updates"] == 2 and result["additional_collection_episodes"] == 1
-    assert third["next_episode_id"] == 14 and third["model_version"] == 4
+    assert third["next_episode_id"] == 14 and third["model_version"] == 1
     assert third["block_updates_done"] == 2 and third["collection_remaining"] == 0
     assert third["termination_fit"] == third["validation"]["termination_fit"]
-    np.testing.assert_equal(norm.mean, norm_after.mean)  # Fixed scaling across representation refreshes.
+    source, _, _, _ = load_checkpoint(output / "world_model.pt", cfg, "cpu")
+    for saved in (first, second, third):
+        assert saved['model_updates'] == source['model_updates']
+        assert saved['termination_updates'] == source['termination_updates']
+        assert all(torch.equal(value, saved['model'][key]) for key, value in source['model'].items())
+    np.testing.assert_equal(norm.mean, norm_after.mean)  # Fixed scaling across replay rebuilds.
     report = runner.evaluate(cfg, output / "agent.pt", output / "evaluation.json", episodes=2)
     assert len(report["episodes"]) == 2
     assert report["episodes"][0]["seed"] == cfg.training.seed + 100000
@@ -494,7 +546,8 @@ def test_oracle_child_visibility_uses_field_of_view_occlusion_and_weather(cfg):
     env = SimpleNamespace(cfg=cfg, carla=carla, ego=ego, world=world,
         map=SimpleNamespace(get_waypoint=lambda *args, **kwargs: road),
         previous_action=np.zeros(3, np.float32), route=Route([[0, 0], [100, 0]]),
-        upcoming_controls=lambda: {"light": None, "stop": None})
+        remaining_time_seconds=cfg.environment.max_steps * cfg.environment.decision_dt,
+        upcoming_controls=lambda: {"light": None})
     extractor = OracleExtractor(env)
     observation, measurement = extractor.measure()
     assert measurement["child_near"]
@@ -511,3 +564,15 @@ def test_oracle_child_visibility_uses_field_of_view_occlusion_and_weather(cfg):
     observation, measurement = extractor.measure()
     assert not measurement["child_near"]  # Beyond the reduced rain/fog/night visibility range.
     assert observation.continuous[12] == 5
+
+    # Verify pause eligibility against actual oracle lane, speed and light geometry.
+    road.transform = carla.Transform()
+    ego.get_velocity = lambda: carla.Vector3D()
+    light = SimpleNamespace(get_state=lambda: carla.TrafficLightState.Red)
+    env.upcoming_controls = lambda: {"light": {"s": 4.5, "actor": light}}
+    assert extractor.measure()[1]["blocked"]
+    transform.rotation.yaw = 90
+    assert not extractor.measure()[1]["blocked"]
+    transform.rotation.yaw = 0
+    env.map.get_waypoint = lambda *args, **kwargs: road if kwargs.get("project_to_road") else None
+    assert not extractor.measure()[1]["blocked"]

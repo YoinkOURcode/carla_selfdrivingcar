@@ -1,0 +1,3 @@
+Removed stop sign recognition
+added -100 reward penalty for not completing on time
+Noticed that even when run is completed, sometimes total reward is lower than run NOT completed. May need to increase success reward and penalise uncompleted rewards

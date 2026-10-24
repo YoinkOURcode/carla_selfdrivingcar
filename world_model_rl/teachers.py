@@ -2,10 +2,11 @@
 
 import numpy as np
 
+from .control import LIGHT_STOP_MARGIN_M
 from .schema import OBJECT_OFFSET, SLOTS
 
 
-def geometry_actions(arrays, calibrated=False, hold_stops=False, early_light_hold=False):
+def geometry_actions(arrays, calibrated=False, hold_stops=False):
     """A conservative pursuit/speed teacher on current structured training states only.
 
     It supplies counterfactual action labels, not measured actions or dynamics targets.
@@ -34,7 +35,7 @@ def geometry_actions(arrays, calibrated=False, hold_stops=False, early_light_hol
     controls = arrays["controls"][:-1]
     light = arrays["light"][:-1]
     red_or_yellow = controls[:, 0] & np.isin(light, [2, 3]) & (c[:, 14] >= 0)
-    light_speed = np.sqrt(2 * deceleration * np.maximum(c[:, 14] - 2.5, 0))
+    light_speed = np.sqrt(2 * deceleration * np.maximum(c[:, 14] - LIGHT_STOP_MARGIN_M, 0))
     target = np.where(red_or_yellow, np.minimum(target, light_speed), target)
 
     objects = c[:, OBJECT_OFFSET:].reshape(-1, SLOTS, 7)
@@ -65,11 +66,4 @@ def geometry_actions(arrays, calibrated=False, hold_stops=False, early_light_hol
         stopped_target = target <= .3
         throttle = np.where(stopped_target, 0, throttle)
         brake = np.where(stopped_target, np.maximum(brake, .35), brake)
-    if early_light_hold:
-        # Training-only v4: remove the approach/re-acceleration ambiguity seen in
-        # v3 labels. Uniform decisive braking inside the same 25 m legitimate-wait
-        # zone gives the neural policy a consistent red/yellow stopping target.
-        near_stop = red_or_yellow & (c[:, 14] <= 25)
-        throttle = np.where(near_stop, 0, throttle)
-        brake = np.where(near_stop, np.maximum(brake, np.where(speed > .3, .6, .35)), brake)
     return np.stack([steering, throttle, brake], -1).astype(np.float32)

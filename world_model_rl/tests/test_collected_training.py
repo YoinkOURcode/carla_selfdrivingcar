@@ -76,7 +76,7 @@ def test_collect_cli_appends_new_scenario_with_explicit_saved_config(tmp_path, m
     config = tmp_path / "config.json"
     config.write_text(json.dumps(Config().to_dict()))
     received = []
-    monkeypatch.setattr(runner, "collect", lambda *args: received.append(args))
+    monkeypatch.setattr(runner, "collect", lambda *args, **kwargs: received.append(args))
     main(["collect", "--config", str(config), "--data", str(tmp_path / "data"),
           "--allow-scenario-variation", "--town", "Town02", "--weather", "WetNoon", "ClearNight",
           "--vehicles", "30", "--pedestrians", "10", "--episodes", "20"])

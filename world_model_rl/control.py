@@ -3,6 +3,12 @@
 import numpy as np
 
 
+# Distances are from the front bumper to the relevant traffic light stopping line.
+LIGHT_STOP_MARGIN_M = 2.5
+LIGHT_WAIT_DISTANCE_M = 5.0
+WAIT_SPEED_MPS = 0.3
+
+
 def apply_action(requested, previous, cfg):
     requested = np.asarray(requested, np.float32)
     previous = np.asarray(previous, np.float32)

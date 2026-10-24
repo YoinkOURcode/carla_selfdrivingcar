@@ -42,6 +42,7 @@ class CarlaDrivingEnv:
         self.original_settings = self.world.get_settings()
         self.original_weather = self.world.get_weather()
         self.actors, self.controllers, self.sensors = [], [], []
+        self.staged_hazard = None
         self.provider = None
         self.tm = None
         self.closed = False
@@ -82,6 +83,7 @@ class CarlaDrivingEnv:
             if actor.is_alive:
                 actor.destroy()
         self.actors, self.controllers, self.sensors = [], [], []
+        self.staged_hazard = None
 
     def close(self):
         if self.closed:
@@ -207,6 +209,7 @@ class CarlaDrivingEnv:
                                f"{self.vehicle_count}/{self.pedestrian_count}. Reduce counts explicitly.")
 
     def _build_controls(self):
+        """Cache lane-specific traffic light stopping lines, including off-route lines."""
         self.controls = []
         for actor in self.world.get_actors():
             if actor.type_id.startswith("traffic.traffic_light"):
@@ -220,36 +223,29 @@ class CarlaDrivingEnv:
                     self.controls.append({"kind": "light", "actor": actor, "s": s,
                         "centre": np.array([p.x, p.y]), "forward": f,
                         "half_width": waypoint.lane_width / 2, "on_route": on_route})
-            elif actor.type_id.startswith("traffic.stop"):
-                matches = [(i, wp) for i, (wp, _) in enumerate(self.route_plan)
-                           if actor.trigger_volume.contains(wp.transform.location, actor.get_transform())]
-                if matches:
-                    _, wp = matches[0]
-                else:
-                    centre = actor.get_transform().transform(actor.trigger_volume.location)
-                    wp = self.map.get_waypoint(centre, lane_type=self.carla.LaneType.Driving)
-                if wp is not None:
-                    p = wp.transform.location
-                    forward = wp.transform.get_forward_vector()
-                    s, _, _ = self.route.project([p.x, p.y])
-                    self.controls.append({"kind": "stop", "actor": actor, "s": s,
-                        "centre": np.array([p.x, p.y]), "forward": np.array([forward.x, forward.y]),
-                        "half_width": wp.lane_width / 2, "dwell": 0.0, "satisfied": False,
-                        "on_route": bool(matches)})
 
     def upcoming_controls(self):
-        result = {"light": None, "stop": None}
+        """Return the nearest route-relevant traffic light stopping line."""
+        result = {"light": None}
         front_s = self.route.progress + self.ego.bounding_box.extent.x
         for control in sorted(self.controls, key=lambda item: item["s"]):
             if control["on_route"] and -3 <= control["s"] - front_s <= 80 and result[control["kind"]] is None:
                 result[control["kind"]] = control
         return result
 
+    @property
+    def remaining_time_seconds(self):
+        """Return the active driving budget; paused waits do not spend decisions."""
+        e = self.cfg.environment
+        return max(0, e.max_steps - self.active_steps) * e.decision_dt
+
     def _policy_observation(self):
         observation = self.provider.observe(self, self.oracle).validate()
         if self.cfg.environment.observation_provider != "ground_truth":
             # Rewards still use independent CARLA truth; the actor's child target uses predictions.
             observation = perception_caution(observation, self.cfg.environment)
+        # The episode clock is runtime state, including for future camera providers.
+        observation.continuous[15] = self.remaining_time_seconds
         return observation
 
     def _attach_sensors(self):
@@ -315,7 +311,8 @@ class CarlaDrivingEnv:
             raise RuntimeError("World frame changed outside this collector")
         return current
 
-    def reset(self, episode_id=0, seed=None):
+    def reset(self, episode_id=0, seed=None, hazard_seed=None):
+        """Reset a real episode, optionally staging a collection-only hazard actor."""
         self._destroy_actors()
         e = self.cfg.environment
         seed = self.cfg.training.seed + episode_id if seed is None else seed
@@ -336,6 +333,9 @@ class CarlaDrivingEnv:
         self.ego.apply_physics_control(physics)
         lights = self.carla.VehicleLightState.Position | self.carla.VehicleLightState.LowBeam
         self.ego.set_light_state(self.carla.VehicleLightState(lights))
+        if hazard_seed is not None:
+            from .collection import StagedHazard
+            self.staged_hazard = StagedHazard(self, hazard_seed)
         self._spawn_traffic(rng)
         self.world.tick(e.timeout)
         for controller in self.controllers:
@@ -356,11 +356,11 @@ class CarlaDrivingEnv:
         self.committed_frame = self.frame
         self.extractor = OracleExtractor(self)
         self.reward_calculator = RewardCalculator(self.cfg)
+        self.steps = self.active_steps = 0
         self.oracle, self.measurement = self.extractor.measure()
         self.provider = load_provider(e.observation_provider, self)
         self.provider.reset()
         observation = self._policy_observation()
-        self.steps = 0
         self.stuck_time = self.offroad_time = 0.0
         self.ended = False
         self.expert = None
@@ -373,6 +373,11 @@ class CarlaDrivingEnv:
             "route_length_m": self.route.length, "vehicles": self.vehicle_count,
             "pedestrians": self.pedestrian_count, "children": self.child_count,
             "ego_friction_factor": friction_factor, "collector": "unset"}
+        if self.staged_hazard is not None:
+            kind = self.staged_hazard.metadata["kind"]
+            self.metadata["vehicles"] += int(kind == "vehicle")
+            self.metadata["pedestrians"] += int(kind != "vehicle")
+            self.metadata["children"] += int(kind == "child")
         from .rewards import REWARD_VERSION
         self.metadata["reward_version"] = REWARD_VERSION
         return observation, {"frame": self.frame, "sim_time": self.sim_time}
@@ -407,27 +412,18 @@ class CarlaDrivingEnv:
             if frame > self.committed_frame:
                 raise RuntimeError("World advanced outside this collector at episode end")
 
-    def _traffic_events(self, before_front, after_front, speed):
-        incoming = {"red_light": 0, "stop_sign": 0}
+    def _traffic_events(self, before_front, after_front):
+        """Count red-light front-bumper crossings at each physics tick."""
+        incoming = {"red_light": 0}
         for control in self.controls:
-            if control["kind"] == "stop":
-                delta = control["centre"] - after_front
-                distance = np.dot(delta, control["forward"])
-                lateral = abs(np.dot(delta, [-control["forward"][1], control["forward"][0]]))
-                if 0 <= distance <= 6 and lateral <= control["half_width"] + 0.5 and speed < 0.3:
-                    control["dwell"] += self.cfg.environment.fixed_delta_seconds
-                    control["satisfied"] |= control["dwell"] >= 1.0
-                elif not control["satisfied"]:
-                    control["dwell"] = 0.0
             if crosses_line(before_front, after_front, control["centre"],
                             control["forward"], control["half_width"]):
-                if control["kind"] == "light" and control["actor"].get_state() == self.carla.TrafficLightState.Red:
+                if control["actor"].get_state() == self.carla.TrafficLightState.Red:
                     incoming["red_light"] += 1
-                elif control["kind"] == "stop" and not control["satisfied"]:
-                    incoming["stop_sign"] += 1
         return incoming
 
     def step(self, requested):
+        """Apply one decision and spend the deadline only outside legitimate light waits."""
         if self.ended:
             raise RuntimeError("Call reset after the episode ends")
         e, carla = self.cfg.environment, self.carla
@@ -438,15 +434,16 @@ class CarlaDrivingEnv:
                                                    brake=float(applied[2])))
         before = self.measurement
         front = before["front"]
-        control_events = {"red_light": 0, "stop_sign": 0}
+        control_events = {"red_light": 0}
         for _ in range(e.action_repeat):
+            if getattr(self, "staged_hazard", None) is not None:
+                self.staged_hazard.tick()
             self._tick(settle=False)
             if self.controls:
-                # Keep cheap crossing/dwell checks at physics rate, including light phase changes.
+                # Keep crossing checks at physics rate, including light phase changes.
                 bumper = self.ego.get_transform().transform(carla.Location(x=self.ego.bounding_box.extent.x))
                 next_front = np.array([bumper.x, bumper.y])
-                velocity = self.ego.get_velocity()
-                found = self._traffic_events(front, next_front, math.hypot(velocity.x, velocity.y))
+                found = self._traffic_events(front, next_front)
                 for name, value in found.items():
                     control_events[name] += value
                 front = next_front
@@ -457,22 +454,23 @@ class CarlaDrivingEnv:
         after = self.measurement
         distance_metres = float(np.linalg.norm(after["position"] - before["position"]))
         incoming["success"] = float(after["success"] and not incoming["collision"])
-        components, events = self.reward_calculator.step(before, after, incoming,
-            e.decision_dt, applied, previous)
         self.offroad_time = self.offroad_time + e.decision_dt if after["offroad"] else 0.0
         if after["speed"] >= 0.2 or after["progress_distance"] > 0.01 or after["blocked"]:
             self.stuck_time = 0.0
         else:
             self.stuck_time += e.decision_dt
         self.steps += 1
-        if events["collision"]:
-            components["success"] = 0.0
-            events["success"] = 0.0
-        terminated = bool(events["collision"] or events["success"] or self.offroad_time >= e.offroad_seconds)
-        truncated = bool(not terminated and (self.steps >= e.max_steps or self.stuck_time >= e.stuck_seconds))
-        reason = ("collision" if events["collision"] else "success" if events["success"] else
-                  "offroad" if terminated else "time_limit" if self.steps >= e.max_steps else
+        self.active_steps += int(not after["blocked"])
+        self.oracle.continuous[15] = self.remaining_time_seconds
+        task_ended = bool(incoming["collision"] or incoming["success"] or self.offroad_time >= e.offroad_seconds)
+        incoming["time_limit"] = float(not task_ended and self.active_steps >= e.max_steps)
+        terminated = bool(task_ended or incoming["time_limit"])
+        truncated = bool(not terminated and self.stuck_time >= e.stuck_seconds)
+        reason = ("collision" if incoming["collision"] else "success" if incoming["success"] else
+                  "offroad" if task_ended else "time_limit" if incoming["time_limit"] else
                   "stuck" if truncated else "running")
+        components, events = self.reward_calculator.step(before, after, incoming,
+            e.decision_dt, applied, previous)
         self.ended = terminated or truncated
         self.committed_frame = self.frame
         observation = self._policy_observation()

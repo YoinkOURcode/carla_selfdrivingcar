@@ -6,7 +6,7 @@ from torch import nn
 from torch.distributions import Normal, kl_divergence
 from torch.nn import functional as F
 
-from .schema import (CONTEXT, CONTINUOUS, LIGHT_CLASSES, OBJECT_FIELDS, OBJECT_OFFSET,
+from .schema import (CONTEXT, CONTINUOUS, CONTROLS, LIGHT_CLASSES, OBJECT_FIELDS, OBJECT_OFFSET,
                      SLOTS, WAYPOINTS, continuous_valid)
 
 
@@ -38,9 +38,9 @@ class AttentionEncoder(nn.Module):
         super().__init__()
         width = cfg.embedding
         self.ego = nn.Linear(8, width)
-        self.route = nn.Linear(6, width)
+        self.route = nn.Linear(7, width)
         self.weather = nn.Linear(4, width)
-        self.control = nn.Linear(2 + 2 + len(LIGHT_CLASSES), width)
+        self.control = nn.Linear(1 + CONTROLS + len(LIGHT_CLASSES), width)
         self.waypoint = nn.Linear(2, width)
         self.object = nn.Linear(len(OBJECT_FIELDS), width)
         self.object_class = nn.Embedding(3, width)
@@ -57,10 +57,11 @@ class AttentionEncoder(nn.Module):
         obs = {key: value.reshape(-1, *value.shape[len(leading):]) for key, value in obs.items()}
         c = obs["continuous"]
         batch = c.shape[0]
+        # Remaining active time belongs to the route task even without a visible light.
         tokens = [self.ego(c[:, :8]) + self.token_type.weight[0],
-                  self.route(c[:, 8:14]) + self.token_type.weight[1],
+                  self.route(torch.cat([c[:, 8:14], c[:, 15:16]], -1)) + self.token_type.weight[1],
                   self.weather(c[:, 16:20]) + self.token_type.weight[2],
-                  self.control(torch.cat([c[:, 14:16], obs["controls"].float(),
+                  self.control(torch.cat([c[:, 14:15], obs["controls"].float(),
                       F.one_hot(obs["light"].long(), len(LIGHT_CLASSES)).float()], -1)) + self.token_type.weight[3]]
         scene = torch.stack(tokens, 1)
         waypoints = self.waypoint(c[:, CONTEXT:OBJECT_OFFSET].reshape(batch, WAYPOINTS, 2))
@@ -95,7 +96,7 @@ class RSSM(nn.Module):
         self.posterior_net = mlp(cfg.deterministic + cfg.embedding, cfg.stochastic * 2, cfg.hidden)
         features = cfg.deterministic + cfg.stochastic
         self.continuous_head = mlp(features, CONTINUOUS, cfg.hidden)
-        self.presence_head = mlp(features, SLOTS + 2, cfg.hidden)
+        self.presence_head = mlp(features, SLOTS + CONTROLS, cfg.hidden)
         self.class_head = mlp(features, SLOTS * 3 + len(LIGHT_CLASSES), cfg.hidden)
         self.reward_head = mlp(features, 1, cfg.hidden)
         self.termination_head = mlp(features, 1, cfg.hidden)
@@ -141,7 +142,10 @@ class RSSM(nn.Module):
 
     @property
     def termination_physical_size(self):
-        return 126 if self.termination_observation_skip else 23 if self.termination_context_skip else 0
+        """Count the causal physical fields replacing the tail of the latent readout."""
+        if self.termination_observation_skip:
+            return CONTEXT + SLOTS * (len(OBJECT_FIELDS) + 1) + CONTROLS + len(LIGHT_CLASSES) + 3
+        return CONTEXT + 3 if self.termination_context_skip else 0
 
     def termination_inputs(self, state, context=None, applied=None, observation=None):
         features = torch.cat(state, -1)

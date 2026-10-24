@@ -56,7 +56,7 @@ def evaluation_metrics(summaries, plan, cfg):
     def aggregate(items):
         def count(item, name):
             return item.get("event_totals", {}).get(name, item["event_decision_counts"].get(name, 0))
-        violation_fields = ("collision", "red_light", "stop_sign", "illegal_lane", "offroad",
+        violation_fields = ("collision", "red_light", "illegal_lane", "offroad",
                             "wrong_way", "unsafe_child", "unsafe_weather")
         collisions = sum(bool(count(item, "collision")) or
                          item["terminal_reason"] == "collision" for item in items)

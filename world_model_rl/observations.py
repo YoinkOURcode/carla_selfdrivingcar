@@ -6,7 +6,7 @@ from typing import Protocol
 
 import numpy as np
 
-from .control import visibility_range, weather_limits
+from .control import LIGHT_WAIT_DISTANCE_M, WAIT_SPEED_MPS, visibility_range, weather_limits
 from .geometry import TrackedSlots, ego_relative
 from .schema import (CONTEXT, OBJECT_OFFSET, PEDESTRIAN_SLOTS, VEHICLE_SLOTS,
                      Observation)
@@ -159,24 +159,24 @@ class OracleExtractor:
                 observation.ids[i] = identities[i]
         progress_distance = env.route.update([location.x, location.y])
         controls = env.upcoming_controls()
-        light, stop = controls["light"], controls["stop"]
+        light = controls["light"]
         target = min(weather_limit, cfg.child_speed_mps if child_near else speed_limit)
-        observation.controls[:] = [light is not None, stop is not None]
+        observation.controls[:] = [light is not None]
         light_distance = 0 if light is None else light["s"] - env.route.progress - ego.bounding_box.extent.x
-        stop_distance = 0 if stop is None else stop["s"] - env.route.progress - ego.bounding_box.extent.x
         state = "none" if light is None else str(light["actor"].get_state()).split(".")[-1].lower()
         observation.light = np.array({"none": 0, "red": 2, "yellow": 3, "green": 4}.get(state, 1), np.int64)
         observation.continuous[:CONTEXT] = [*local_velocity, *local_acceleration,
             -math.radians(ego.get_angular_velocity().z), *env.previous_action, lane_offset,
             math.sin(heading), math.cos(heading), speed_limit, target,
-            max(0, env.route.length - env.route.progress), light_distance, stop_distance,
+            max(0, env.route.length - env.route.progress), light_distance, env.remaining_time_seconds,
             weather.precipitation, weather.wetness, weather.fog_density, weather.sun_altitude_angle]
         waypoints = env.route.at(env.route.progress + np.array([5, 10, 20, 30, 40]))
         observation.continuous[CONTEXT:OBJECT_OFFSET] = np.concatenate([
             ego_relative(point - [location.x, location.y], yaw) for point in waypoints])
         front = transform.transform(carla.Location(x=ego.bounding_box.extent.x))
-        blocked = legitimate_wait(light is not None, state, light_distance,
-                                  stop is not None, stop_distance, stop is not None and stop["satisfied"])
+        on_lane = exact_road is not None and abs(lane_offset) <= road.lane_width / 2 and math.cos(heading) > 0.8
+        blocked = on_lane and legitimate_wait(light is not None, state, light_distance,
+                                              float(np.linalg.norm(local_velocity)))
         return observation.validate(), {
             "speed": float(np.linalg.norm([velocity.x, velocity.y])), "speed_limit": speed_limit,
             "weather_limit": weather_limit, "child_near": bool(child_near),
@@ -192,7 +192,7 @@ class OracleExtractor:
             "lane_offset": float(lane_offset), "heading_error": math.atan2(math.sin(heading), math.cos(heading))}
 
 
-def legitimate_wait(has_light, state, light_distance, has_stop, stop_distance, stop_satisfied):
-    # A child triggers cautious speed, not an unconditional exemption from stuck detection.
-    return (has_light and state in ("red", "yellow") and 0 <= light_distance <= 25) or (
-        has_stop and 0 <= stop_distance <= 8 and not stop_satisfied)
+def legitimate_wait(has_light, state, light_distance, speed):
+    """Pause the deadline only while stopped just before a relevant red/yellow line."""
+    return (has_light and state in ("red", "yellow") and
+            0 <= light_distance <= LIGHT_WAIT_DISTANCE_M and speed < WAIT_SPEED_MPS)

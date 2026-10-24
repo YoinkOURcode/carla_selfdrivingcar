@@ -28,6 +28,12 @@ def main(argv=None):
             command.add_argument("--vehicles", type=int)
             command.add_argument("--pedestrians", type=int)
             command.add_argument("--controller", choices=("mixed", "autopilot", "noisy"), default="mixed")
+            command.add_argument("--perturbations", action="store_true",
+                                 help="Apply sustained steering/acceleration disturbances during exposed episodes")
+            command.add_argument("--staged-hazards", action="store_true",
+                                 help="Stage a parked vehicle or adult/child crossing during exposed episodes")
+            command.add_argument("--exposure-fraction", type=float, default=.8,
+                                 help="Episode exposure probability for enabled options (default: 0.8)")
             command.add_argument("--policy-checkpoint", help="Collect policy states with separate BasicAgent action labels")
             command.add_argument("--expert-probability", type=float, default=.5,
                                  help="Probability of executing the expert during labelled policy collection")
@@ -67,6 +73,12 @@ def main(argv=None):
     if getattr(args, "allow_scenario_variation", False):
         cfg.training.allow_scenario_variation = True
     if args.command == "collect":
+        from .collection import CollectionOptions
+        try:
+            CollectionOptions(args.perturbations, args.staged_hazards,
+                              args.exposure_fraction).validate(args.policy_checkpoint)
+        except ValueError as exc:
+            parser.error(str(exc))
         for key in ("town", "weather", "vehicles", "pedestrians"):
             if getattr(args, key) is not None:
                 setattr(cfg.environment, key, getattr(args, key))
@@ -105,7 +117,9 @@ def main(argv=None):
                           "spawn_points": len(world.get_map().get_spawn_points())}, indent=2))
     elif args.command == "collect":
         runner.collect(cfg, args.data, args.episodes or cfg.training.bootstrap_episodes, args.controller,
-                       args.policy_checkpoint, args.expert_probability)
+                       args.policy_checkpoint, args.expert_probability,
+                       perturbations=args.perturbations, staged_hazards=args.staged_hazards,
+                       exposure_fraction=args.exposure_fraction)
     elif args.command == "validate":
         report = runner.validate_dataset(cfg, args.data)
         print(json.dumps(report, indent=2))
