@@ -1,0 +1,8 @@
+# The repo root ignores *.md; these docs are part of this package and listed in SHA256SUMS
+!*.md
+.venv/
+__pycache__/
+carla_runs/
+selftest_out/
+demo_out/
+.DS_Store
