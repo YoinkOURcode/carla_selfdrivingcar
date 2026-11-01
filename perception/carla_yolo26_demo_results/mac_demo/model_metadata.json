@@ -1,0 +1,17 @@
+{
+  "class_names": {
+    "0": "other_vehicle",
+    "1": "red_light",
+    "2": "yellow_light",
+    "3": "green_light",
+    "4": "adult_pedestrian",
+    "5": "child_pedestrian",
+    "6": "speed_limit"
+  },
+  "mapping_status": "provisional_visual_inspection",
+  "imgsz": 1280,
+  "display_confidence": 0.25,
+  "ultralytics": "8.4.174",
+  "checkpoint_sha256": "b3519693d64ce37751398c14a62d78c075617b6546dfe60fd2b2a39741e237f1",
+  "limitation": "Provisional: retrained on corrected label copies, judged on Round 2 validation only, single seed, no clean test"
+}

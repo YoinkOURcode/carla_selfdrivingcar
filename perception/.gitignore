@@ -1,0 +1,5 @@
+.venv/
+.yolo_config/
+.matplotlib/
+__pycache__/
+local_runs/
