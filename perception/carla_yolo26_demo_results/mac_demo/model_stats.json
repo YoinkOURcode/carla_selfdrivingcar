@@ -1,0 +1,378 @@
+{
+ "names": [
+  "other_vehicle",
+  "red_light",
+  "yellow_light",
+  "green_light",
+  "adult_pedestrian",
+  "child_pedestrian",
+  "speed_limit"
+ ],
+ "metrics": {
+  "corrected_ultralytics": {
+   "other_vehicle": [
+    0.78,
+    0.81,
+    0.836,
+    0.551
+   ],
+   "red_light": [
+    0.647,
+    0.645,
+    0.674,
+    0.356
+   ],
+   "yellow_light": [
+    0.492,
+    0.605,
+    0.456,
+    0.237
+   ],
+   "green_light": [
+    0.531,
+    0.773,
+    0.687,
+    0.341
+   ],
+   "adult_pedestrian": [
+    0.784,
+    0.735,
+    0.796,
+    0.489
+   ],
+   "child_pedestrian": [
+    0.695,
+    0.525,
+    0.624,
+    0.346
+   ],
+   "speed_limit": [
+    0.506,
+    0.365,
+    0.429,
+    0.307
+   ]
+  },
+  "r2_val": [
+   [
+    "Previous fine-tuned model, original labels",
+    0.838,
+    0.556,
+    0.362,
+    0.484,
+    0.803,
+    0.619,
+    0.447,
+    0.587
+   ],
+   [
+    "Two-stage pipeline, original labels (not adopted)",
+    0.818,
+    0.551,
+    0.387,
+    0.457,
+    0.806,
+    0.622,
+    0.438,
+    0.583
+   ],
+   [
+    "Current model, original labels",
+    0.836,
+    0.572,
+    0.368,
+    0.508,
+    0.796,
+    0.624,
+    0.429,
+    0.591
+   ],
+   [
+    "Previous fine-tuned model, corrected labels",
+    0.838,
+    0.616,
+    0.388,
+    0.586,
+    0.803,
+    0.619,
+    0.447,
+    0.614
+   ],
+   [
+    "Current model, corrected labels",
+    0.836,
+    0.674,
+    0.456,
+    0.687,
+    0.796,
+    0.624,
+    0.429,
+    0.643
+   ],
+   [
+    "Previous fine-tuned model, Annotator B frames (labels unedited)",
+    0.849,
+    0.694,
+    0.287,
+    0.636,
+    0.86,
+    0.635,
+    0.886,
+    0.693
+   ],
+   [
+    "Current model, Annotator B frames (labels unedited)",
+    0.844,
+    0.711,
+    0.325,
+    0.746,
+    0.849,
+    0.631,
+    0.801,
+    0.701
+   ]
+  ],
+  "r1_val": [
+   [
+    "Previous fine-tuned model",
+    0.914,
+    0.994,
+    0.1,
+    0.76,
+    0.692
+   ],
+   [
+    "Current model",
+    0.91,
+    0.993,
+    0.063,
+    0.727,
+    0.673
+   ]
+  ],
+  "found": [
+   [
+    "red_light",
+    1142,
+    0.546,
+    0.786
+   ],
+   [
+    "yellow_light",
+    81,
+    0.543,
+    0.654
+   ],
+   [
+    "green_light",
+    269,
+    0.736,
+    0.796
+   ]
+  ],
+  "annotator_found": {
+   "Annotator A": 0.3,
+   "Annotator B": 0.73
+  }
+ },
+ "annotators": {
+  "Annotator A": {
+   "frames": 3235,
+   "light_boxes": 7264,
+   "median_w": 17.8,
+   "median_h": 29.4
+  },
+  "Annotator B": {
+   "frames": 5825,
+   "light_boxes": 8306,
+   "median_w": 12.4,
+   "median_h": 23.7
+  }
+ },
+ "rounds": {
+  "Round 1": {
+   "train": {
+    "images": 1971,
+    "boxes": [
+     2410,
+     1845,
+     398,
+     744,
+     0,
+     0,
+     0
+    ],
+    "median_w": [
+     61.3,
+     19.4,
+     31.3,
+     22.0,
+     null,
+     null,
+     null
+    ],
+    "median_h": [
+     35.3,
+     37.4,
+     46.6,
+     45.3,
+     null,
+     null,
+     null
+    ]
+   },
+   "val": {
+    "images": 648,
+    "boxes": [
+     863,
+     615,
+     62,
+     254,
+     0,
+     0,
+     0
+    ],
+    "median_w": [
+     59.1,
+     10.7,
+     18.2,
+     15.0,
+     null,
+     null,
+     null
+    ],
+    "median_h": [
+     33.3,
+     26.4,
+     52.8,
+     34.7,
+     null,
+     null,
+     null
+    ]
+   },
+   "test": {
+    "images": 661,
+    "boxes": [
+     984,
+     560,
+     42,
+     255,
+     0,
+     0,
+     0
+    ],
+    "median_w": [
+     56.7,
+     10.9,
+     28.6,
+     20.7,
+     null,
+     null,
+     null
+    ],
+    "median_h": [
+     34.3,
+     26.6,
+     69.8,
+     43.4,
+     null,
+     null,
+     null
+    ]
+   }
+  },
+  "Round 2": {
+   "train": {
+    "images": 6287,
+    "boxes": [
+     10892,
+     8433,
+     678,
+     1751,
+     7231,
+     1891,
+     1143
+    ],
+    "median_w": [
+     71.1,
+     15.0,
+     15.7,
+     15.5,
+     22.6,
+     20.0,
+     24.6
+    ],
+    "median_h": [
+     45.3,
+     26.0,
+     27.1,
+     28.0,
+     54.6,
+     44.3,
+     40.2
+    ]
+   },
+   "val": {
+    "images": 889,
+    "boxes": [
+     1450,
+     1142,
+     81,
+     269,
+     1117,
+     295,
+     159
+    ],
+    "median_w": [
+     77.3,
+     16.4,
+     17.5,
+     17.1,
+     23.7,
+     22.6,
+     23.2
+    ],
+    "median_h": [
+     47.4,
+     27.4,
+     26.8,
+     31.9,
+     56.7,
+     49.4,
+     36.2
+    ]
+   },
+   "test": {
+    "images": 1884,
+    "boxes": [
+     3439,
+     2434,
+     206,
+     576,
+     2079,
+     546,
+     299
+    ],
+    "median_w": [
+     72.1,
+     14.4,
+     14.4,
+     13.4,
+     22.6,
+     20.6,
+     26.0
+    ],
+    "median_h": [
+     46.3,
+     24.2,
+     23.7,
+     24.6,
+     54.8,
+     44.4,
+     43.2
+    ]
+   }
+  }
+ }
+}
