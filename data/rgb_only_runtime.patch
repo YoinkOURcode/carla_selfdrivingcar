@@ -1,0 +1,37 @@
+diff --git a/Unreal/CarlaUE4/Plugins/Carla/Source/Carla/Game/TaggedComponent.cpp b/Unreal/CarlaUE4/Plugins/Carla/Source/Carla/Game/TaggedComponent.cpp
+index b6b59824d..e4f0b0a5a 100644
+--- a/Unreal/CarlaUE4/Plugins/Carla/Source/Carla/Game/TaggedComponent.cpp
++++ b/Unreal/CarlaUE4/Plugins/Carla/Source/Carla/Game/TaggedComponent.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "Rendering/SkeletalMeshRenderData.h"
+ #include "SkeletalRenderPublic.h"
++#include "Misc/CommandLine.h"
++#include "Misc/Parse.h"
+ 
+ //
+ // UTaggedComponent
+@@ -82,6 +84,12 @@ FBoxSphereBounds UTaggedComponent::CalcBounds(const FTransform & LocalToWorld) c
+ 
+ FPrimitiveSceneProxy * UTaggedComponent::CreateSceneProxy()
+ {
++  // RGB-only collection does not need the duplicate annotation mesh proxies.
++  // Keep this opt-in so semantic/instance cameras retain their normal behavior.
++  if (FParse::Param(FCommandLine::Get(), TEXT("carla-rgb-only")))
++  {
++    return nullptr;
++  }
+   USceneComponent * ParentComponent = GetAttachParent();
+ 
+   if (!IsValid(ParentComponent))
+@@ -418,6 +426,10 @@ FBoxSphereBounds UTaggedLandscapeComponent::CalcBounds(const FTransform & LocalT
+ 
+ FPrimitiveSceneProxy * UTaggedLandscapeComponent::CreateSceneProxy()
+ {
++  if (FParse::Param(FCommandLine::Get(), TEXT("carla-rgb-only")))
++  {
++    return nullptr;
++  }
+   USceneComponent * ParentComponent = GetAttachParent();
+ 
+   if (!IsValid(ParentComponent))

@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CARLA | Live drive</title>
+  <style>
+    :root{color-scheme:dark;font:15px system-ui,sans-serif;background:#0c1118;color:#e5edf7}
+    *{box-sizing:border-box}body{margin:0;padding:24px;max-width:1600px;margin-inline:auto}
+    header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}
+    h1{font-size:23px;margin:0}h1 span,.eyebrow{color:#8c9cb0;font-size:12px;letter-spacing:.13em;text-transform:uppercase}
+    h1 span{display:block;margin-bottom:6px}h2{font-size:15px;margin:0 0 14px}
+    #status{border:1px solid #324258;border-radius:99px;padding:7px 14px;text-transform:uppercase;font-size:12px}
+    #status[data-status=driving],#status[data-status=training],#status[data-status=evaluating]{color:#67e8ba;border-color:#23664f}
+    #status[data-status=error]{color:#ff9d9d;border-color:#a45050}
+    main{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:18px}
+    .panel{background:#141d29;border:1px solid #273449;border-radius:12px;padding:18px}
+    .camera{position:relative;background:#05080d;border-radius:9px;overflow:hidden;aspect-ratio:16/9}
+    canvas{width:100%;height:100%;display:block}#empty{position:absolute;inset:0;display:grid;place-content:center;text-align:center;color:#8c9cb0;padding:20px;pointer-events:none}
+    .camera-bar{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px;color:#9badc4;font-size:12px}
+    .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}
+    .metric{padding:16px;background:#141d29;border:1px solid #273449;border-radius:12px}
+    .value{font-size:29px;font-variant-numeric:tabular-nums;margin-top:7px}.unit{font-size:13px;color:#9badc4}
+    #message{line-height:1.5;margin:14px 0;color:#bdcce0;overflow-wrap:anywhere}
+    label{display:block;font-size:12px;color:#a8b9cf;margin-top:12px}input[type=number]{width:100%;margin-top:6px;border:1px solid #3a4c65;border-radius:6px;padding:10px;background:#0c141f;color:#fff}
+    .inputs{display:grid;grid-template-columns:1fr 1fr;gap:12px}.buttons{display:flex;gap:10px;margin-top:16px}
+    button{border:0;border-radius:6px;padding:11px 16px;font:inherit;cursor:pointer;background:#5be3b0;color:#0b2b20;font-weight:650}
+    button.secondary{background:#29394e;color:#f0f5fc}button:disabled{opacity:.4;cursor:default}
+    .note{font-size:12px;color:#91a5bf;line-height:1.6}.section{margin-top:18px}
+    progress{width:100%;height:8px;accent-color:#5be3b0}#route{font-size:13px;color:#a8b9cf;margin:8px 0}
+    .control{display:grid;grid-template-columns:65px 1fr 48px;align-items:center;gap:8px;font-size:12px;margin-top:14px}
+    .track{height:7px;border-radius:9px;background:#29394e;position:relative;overflow:hidden}.fill{position:absolute;top:0;bottom:0;background:#60a5fa}#brakeBar{background:#fb9a73}#throttleBar{background:#5be3b0}
+    .control output{font-variant-numeric:tabular-nums;text-align:right}#safety{color:#fbc78d;font-size:12px;line-height:1.6}
+    .objects{margin-top:18px}.rewards{margin-top:18px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #273449}th{color:#92a7c2;font-weight:500}
+    #rewardRows .positive{color:#67e8ba}#rewardRows .negative{color:#ff9d9d}#rewardTotal{font-weight:650}#rewardTotal td:last-child{text-align:right}
+    .table-wrap{overflow-x:auto}#speed.over{color:#ff9d9d}input[type=checkbox]{accent-color:#5be3b0}
+    .mode{display:flex;gap:10px;margin-bottom:18px}.mode button[aria-pressed=false]{background:#29394e;color:#bdcce0}
+    [hidden]{display:none!important}.stats{display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:12px;color:#9badc4}
+    .stats strong{display:block;margin-top:5px;color:#e5edf7;font-size:19px;font-weight:550;font-variant-numeric:tabular-nums}
+    #run{overflow-wrap:anywhere}#freshness{color:#fbc78d;margin:10px 0 0}
+    @media(max-width:1000px){body{padding:16px}main{grid-template-columns:1fr}.metrics{gap:8px}.value{font-size:24px}}
+  </style>
+</head>
+<body>
+  <header><h1><span>CARLA / DreamerV3</span><b id="title">Live run</b></h1><div id="status">Connecting</div></header>
+  <nav class="mode" aria-label="Viewer mode"><button id="trainingMode" aria-pressed="true">Live run</button><button id="driveMode" aria-pressed="false">Destination drive</button></nav>
+  <main>
+    <div>
+      <section class="panel" aria-label="Car camera">
+        <div class="camera"><canvas id="camera" width="1280" height="720"></canvas><div id="empty">Waiting for a live camera frame.</div></div>
+        <div class="camera-bar"><span id="frame">Front RGB camera</span></div>
+        <p id="freshness" class="note" role="status"></p>
+      </section>
+      <div class="metrics">
+        <div class="metric"><div class="eyebrow">Speed / limit</div><div class="value"><span id="speed">—</span> <span class="unit">/ <span id="limit">—</span> km/h</span></div></div>
+        <div class="metric"><div class="eyebrow">Distance traveled</div><div class="value"><span id="distance">—</span> <span class="unit">m</span></div></div>
+        <div class="metric"><div class="eyebrow">To destination</div><div class="value"><span id="remaining">—</span> <span class="unit">m</span></div></div>
+      </div>
+      <section class="panel rewards">
+        <h2>Reward breakdown · Current episode</h2>
+        <div class="table-wrap"><table aria-label="Current episode reward breakdown"><thead><tr><th>Name</th><th>Value</th><th>Reward</th></tr></thead><tbody id="rewardRows"><tr><td colspan="3">No reward data for this episode yet.</td></tr></tbody><tfoot id="rewardTotal" hidden><tr><td colspan="2">Total</td><td id="rewardTotalValue"></td></tr></tfoot></table></div>
+      </section>
+      <section class="panel objects">
+        <h2>Policy object inputs</h2>
+        <p class="note" id="objectNote">Objects whose centers project into the camera frame are listed. Projection does not establish visibility.</p>
+        <div class="table-wrap"><table><thead><tr><th>Object slot</th><th>Class</th><th>Distance</th><th>Confidence</th><th>Attention</th></tr></thead><tbody id="objects"><tr><td colspan="5">No current frame.</td></tr></tbody></table></div>
+        <p class="note" id="signal">Traffic signal input unavailable.</p>
+      </section>
+    </div>
+    <aside>
+      <section class="panel" id="trainingPanel">
+        <h2 id="runHeading">Current run</h2>
+        <p class="note">Observes training and evaluation through the car's existing sensors. The feed follows episodes and scenarios automatically.</p>
+        <p id="run" class="note">Looking for an active run…</p>
+        <progress id="trainingProgress" value="0" max="1" aria-label="Run progress"></progress>
+        <p id="trainingSteps" class="note">Run progress pending</p>
+        <div class="stats">
+          <div>Episode<strong id="episode">—</strong></div><div id="updatesMetric">Learner updates<strong id="updates">—</strong></div>
+          <div>Step reward<strong id="reward">—</strong></div><div>Episode return<strong id="episodeReturn">—</strong></div>
+          <div>Action source<strong id="actionSource">—</strong></div><div id="learnerMetric">Learner mode<strong id="learnerMode">—</strong></div>
+        </div>
+        <p id="throughput" class="note"></p>
+      </section>
+      <section class="panel" id="drivePanel" hidden>
+        <h2>Destination drive</h2>
+        <p class="note">Trained Dreamer controls, with the existing safety supervisor. Select map spawn indices for the start and destination.</p>
+        <div class="inputs"><label>Start index<input id="start" type="number" min="0" step="1" value="0"></label><label>Destination index<input id="destination" type="number" min="0" step="1" value="10"></label></div>
+        <div class="buttons"><button id="drive" disabled>Start drive</button><button id="stop" class="secondary" disabled>Stop</button></div>
+        <p id="policy" class="note" style="overflow-wrap:anywhere"></p>
+      </section>
+      <section class="panel section">
+        <h2>Current episode</h2>
+        <p id="message" role="status">Connecting to the viewer…</p>
+        <progress id="progress" value="0" max="1" aria-label="Route completion"></progress><p id="route">Route progress pending</p>
+      </section>
+      <section class="panel section">
+        <h2>Actions being taken</h2>
+        <div class="control"><span>Throttle</span><div class="track"><div class="fill" id="throttleBar"></div></div><output id="throttle">—</output></div>
+        <div class="control"><span>Brake</span><div class="track"><div class="fill" id="brakeBar"></div></div><output id="brake">—</output></div>
+        <div class="control"><span>Steering</span><div class="track"><div class="fill" id="steerBar"></div></div><output id="steer">—</output></div>
+        <p class="note">Steering: negative left, positive right. Controls are those applied to the car in the displayed frame.</p>
+        <p id="safety">Safety interventions pending</p>
+      </section>
+      <section class="panel section">
+        <h2>Attention</h2><label><input id="attention" type="checkbox" checked> Show object attention</label>
+        <p id="attentionState" class="note">Waiting for model inference.</p>
+        <p class="note" id="attentionNote">Requires an attention-enabled checkpoint. Values are the model's fusion weights across image, context, navigation, objects, radar and null tokens; visible objects do not sum to 100%. These are diagnostics, not causal explanations.</p>
+      </section>
+    </aside>
+  </main>
+  <script>
+    const $ = id => document.getElementById(id), number = (n,d=1) => Number.isFinite(n) ? n.toFixed(d) : '—';
+    let initialized = false, current = null, drawSequence = 0, lastFrame = null, pending = false, view = 'training';
+    const learnerModeCache = {run:null, mode:null};
+    function learnerModeText(s,m) {
+      const run = s.run || null;
+      if (run !== learnerModeCache.run) { learnerModeCache.run=run; learnerModeCache.mode=null; }
+      if (m.learner_mode) learnerModeCache.mode=m.learner_mode;
+      return (s.training_mode==='collection'?'collection only':learnerModeCache.mode||
+        (m.updates?'between updates':'warming up')).replaceAll('_',' ');
+    }
+    function renderObjects(s) {
+      const show = $('attention').checked && s.attention_enabled;
+      const policyObjects = s.objects || [];
+      const rows = policyObjects.map(o => {
+        const tr = document.createElement('tr');
+        [String(o.slot), o.label, o.distance_m == null ? 'Unknown' : number(o.distance_m)+' m',
+         number(o.confidence*100,0)+'%',
+         show && o.attention != null ? number(o.attention*100,2)+'%' : 'Unavailable'].forEach(value => {
+          const td=document.createElement('td'); td.textContent=value; tr.appendChild(td);
+        }); return tr;
+      });
+      $('objects').replaceChildren(...rows);
+      $('objectNote').textContent = `Showing ${rows.length} objects whose centers project into the camera frame. Projection does not establish visibility.`;
+      if (!rows.length) { const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=5;td.textContent='No objects in the camera frame.';tr.appendChild(td);$('objects').appendChild(tr); }
+      const signal = s.traffic_signal;
+      $('signal').textContent = signal ? `Traffic light: ${signal.state} · ${signal.distance_m == null ? 'distance unavailable' : number(signal.distance_m)+' m to stop line'}` : 'No red or yellow traffic-light input.';
+    }
+    function renderRewards(s) {
+      const rows = s.reward_breakdown || [];
+      const body = $('rewardRows'), footer = $('rewardTotal');
+      if (!rows.length) {
+        const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=3;
+        td.textContent='No reward data for this episode yet.';body.replaceChildren(tr);tr.appendChild(td);
+        footer.hidden=true;return;
+      }
+      body.replaceChildren(...rows.map(row=>{
+        const tr=document.createElement('tr');
+        [row.name, row.value, number(row.reward,3)].forEach(value=>{
+          const td=document.createElement('td');td.textContent=String(value);tr.appendChild(td);
+        });
+        if(row.reward>0)tr.lastChild.classList.add('positive');
+        else if(row.reward<0)tr.lastChild.classList.add('negative');
+        return tr;
+      }));
+      $('rewardTotalValue').textContent=number(s.episode_return,3);
+      footer.hidden=false;
+    }
+    function draw(s) {
+      const sequence=++drawSequence, ctx=$('camera').getContext('2d');
+      if (!s.image) {ctx.clearRect(0,0,1280,720);$('empty').style.display='grid';$('empty').textContent=view==='training'?(s.message||'Waiting for a live camera frame.'):'Camera unavailable for this frame.';return;}
+      const image=new Image(); image.onload=()=>{
+        if(sequence!==drawSequence)return;
+        $('empty').style.display='none';ctx.drawImage(image,0,0,1280,720);
+        for(const o of s.objects||[]) {
+          const x=o.x*1280,y=o.y*720,show=$('attention').checked && s.attention_enabled;
+          ctx.strokeStyle='#5be3b0';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,13,0,Math.PI*2);ctx.stroke();
+          const text=`#${o.slot} ${o.label}${show ? ' '+number(o.attention*100,2)+'%' : ''}`;
+          ctx.font='19px system-ui';const width=ctx.measureText(text).width+14,tx=Math.max(0,Math.min(1280-width,x+18)),ty=Math.max(28,y-14);
+          ctx.fillStyle='rgba(5,12,20,.88)';ctx.fillRect(tx,ty-23,width,30);ctx.fillStyle='#c8ffe9';ctx.fillText(text,tx+7,ty);
+        }
+      };image.src=s.image;
+    }
+    function render(s) {
+      current=s;const training=view==='training', evaluation=s.mode==='evaluation', runName=evaluation?'evaluation':'training', active=training?s.active:['starting','driving'].includes(s.status);
+      $('status').textContent=training&&!active?(s.status==='idle'?'No live feed':'No active '+runName+' · '+s.status):s.status;$('status').dataset.status=s.status;$('message').textContent=s.message;
+      $('freshness').textContent=training&&s.updated_at?(active?`Feed age: ${number(s.age_s)} s${s.age_s>5?' · Waiting for a new camera frame.':''}`:`Last captured frame · ${number(s.age_s,0)} s ago · This run has ended.`):'';
+      if(training){
+        const m=s.metrics||{};
+        $('title').textContent=s.status==='idle'?'Live run':evaluation?'Live evaluation':'Live training';
+        $('runHeading').textContent=evaluation?'Current evaluation run':'Current training run';
+        $('updatesMetric').hidden=evaluation;$('learnerMetric').hidden=evaluation;
+        $('run').textContent=s.run||'No run found in runs/.';
+        $('trainingProgress').value=evaluation?(m.total_episodes?((m.episode||0)+(m.terminated||m.truncated?1:0))/m.total_episodes:0):s.total_frames?(m.frames||0)/s.total_frames:0;
+        $('trainingSteps').textContent=evaluation?(m.total_episodes?`Scenario ${(m.episode||0)+1} / ${m.total_episodes} · ${m.frames||0} environment steps`:'Waiting for an evaluation scenario'):s.total_frames?`${m.frames||0} / ${s.total_frames} environment steps · ${s.training_mode}`:'Waiting for a live run';
+        $('episode').textContent=m.episode==null?'—':String(m.episode+1);
+        $('updates').textContent=m.updates??'—';$('reward').textContent=number(m.reward,3);$('episodeReturn').textContent=number(s.episode_return,3);
+        $('actionSource').textContent=(m.action_source||'pending').replaceAll('_',' ');
+        $('learnerMode').textContent=learnerModeText(s,m);
+        $('throughput').textContent=Number.isFinite(m.throughput_steps_s)?`${number(m.throughput_steps_s)} steps/s`:'';
+      }
+      $('policy').textContent=s.checkpoint ? `Checkpoint: ${s.checkpoint} · ${s.budget_seconds} s budget per drive` : 'No checkpoint loaded.';
+      const budgetReady=Number.isFinite(s.budget_seconds)&&s.budget_seconds>0&&s.budget_seconds<=86400;
+      $('drive').disabled=training||active||!budgetReady||!s.checkpoint_available||pending;
+      $('stop').disabled=training||!active;$('start').disabled=training||active;$('destination').disabled=training||active;
+      if(!training&&!initialized){$('start').value=s.route_start;$('destination').value=s.route_end;initialized=true;}
+      if(!training&&!budgetReady)$('message').textContent='Driving needs --budget-seconds SECONDS in (0, 86400] when launching the viewer.';
+      else if(!training&&!s.checkpoint_available)$('message').textContent='Launch with --checkpoint PATH to drive using a trained Dreamer model.';
+      $('speed').textContent=number(s.speed_kmh);$('limit').textContent=number(s.speed_limit_kmh,0);
+      $('speed').classList.toggle('over',s.speed_limit_kmh!=null&&s.speed_kmh>s.speed_limit_kmh);
+      $('distance').textContent=number(s.distance_m);$('remaining').textContent=number(s.remaining_m);$('progress').value=s.progress||0;
+      $('route').textContent=s.route_length_m ? `${s.route_start} → ${s.route_end} · ${number((s.progress||0)*100,0)}% of ${number(s.route_length_m)} m route` : 'Route progress pending';
+      $('frame').textContent=s.frame!=null ? `${active&&(!training||s.age_s<=5)?'Live':'Last captured'} RGB · Frame ${s.frame} · ${number(s.simulation_s)} s` : 'Front RGB camera';
+      $('attentionState').textContent=training?'Live feed shows post-action frames; attention overlays are unavailable.':s.attention_enabled===undefined ? 'Waiting for model inference.' : s.attention_enabled ? 'Enabled in this checkpoint.' : 'Disabled in this checkpoint.';
+      for(const key of ['throttle','brake','steer']){
+        const value=s.controls?.[key]||0;$ (key).textContent=key==='steer'?number(value,2):number(value*100,0)+'%';
+        $(key+'Bar').style.left=key==='steer'?(value<0?50+value*50:50)+'%':'0';
+        $(key+'Bar').style.width=Math.abs(value)*(key==='steer'?50:100)+'%';
+      }
+      const missing=Object.entries(s.sensors_valid||{}).filter(([,v])=>!v).map(([k])=>k);
+      $('safety').textContent=(s.interventions?.length ? 'Supervisor: '+s.interventions.join(', ') : 'No supervisor intervention')+(s.safety_events?.length?' · Safety events: '+s.safety_events.join(', '):'')+(Number.isFinite(s.lane_error_m)?' · Lane offset: '+number(s.lane_error_m,2)+' m':'')+(missing.length?' · Missing sensors: '+missing.join(', '):'');
+      const frameKey=JSON.stringify([view,s.run,s.metrics?.episode,s.frame,s.image!=null]);
+      renderRewards(s);renderObjects(s);if(frameKey!==lastFrame||!s.image){lastFrame=frameKey;draw(s);}
+    }
+    async function command(path,body={}){
+      pending=true;$('drive').disabled=true;
+      try{const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await response.json();if(!response.ok)throw new Error(data.error);await poll();}
+      catch(e){$('message').textContent=e.message;}finally{pending=false;}
+    }
+    $('drive').onclick=()=>command('/api/start',{start:Number($('start').value),destination:Number($('destination').value)});
+    $('stop').onclick=()=>command('/api/stop');$('attention').onchange=()=>{if(current){renderObjects(current);draw(current);}};
+    function selectMode(mode){view=mode;lastFrame=null;++drawSequence;$('trainingPanel').hidden=mode!=='training';$('drivePanel').hidden=mode==='training';$('title').textContent=mode==='training'?'Live run':'Live drive';$('trainingMode').setAttribute('aria-pressed',String(mode==='training'));$('driveMode').setAttribute('aria-pressed',String(mode==='drive'));render({status:'connecting',message:'Connecting to the feed…'});poll();}
+    $('trainingMode').onclick=()=>selectMode('training');$('driveMode').onclick=()=>selectMode('drive');
+    async function poll(){const requested=view;try{const response=await fetch(requested==='training'?'/api/training':'/api/state',{cache:'no-store'});if(!response.ok)throw new Error('Viewer unavailable');const state=await response.json();if(view===requested)render(state);}catch(e){if(view!==requested)return;$('status').textContent='Disconnected';$('drive').disabled=true;$('stop').disabled=true;$('freshness').textContent='Connection lost · Displayed frame is no longer live.';$('message').textContent='Viewer connection lost. Check the server terminal.';}}
+    async function loop(){await poll();setTimeout(loop,200);}loop();
+  </script>
+</body>
+</html>

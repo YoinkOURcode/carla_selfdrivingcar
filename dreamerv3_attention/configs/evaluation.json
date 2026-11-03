@@ -1,0 +1,6 @@
+{
+  "attention": true,
+  "device": "cuda",
+  "seed": 7,
+  "split": "held_out"
+}

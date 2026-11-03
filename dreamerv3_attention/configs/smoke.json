@@ -1,0 +1,22 @@
+{
+  "attention": true,
+  "device": "cpu",
+  "seed": 7,
+  "image_size": 16,
+  "max_objects": 0,
+  "hidden": 16,
+  "belief": 16,
+  "categoricals": 2,
+  "classes": 4,
+  "image_depth": 2,
+  "bins": 15,
+  "horizon": 3,
+  "batch": 2,
+  "sequence": 4,
+  "steps": 16,
+  "max_episode_steps": 8,
+  "capacity": 64,
+  "warmup_frames": 4,
+  "warmup_updates": 0,
+  "updates_per_step": 0.25
+}
