@@ -1148,3 +1148,16 @@ def test_red_light_queue_reuses_actor_state_instead_of_querying_actor_again():
     actor.get_location.assert_called_once()
     actor.get_velocity.assert_called_once()
     env.world.get_actors.assert_called_once()
+
+
+@pytest.mark.parametrize("reverse,expected", [
+    (True, dict(throttle=.4, brake=0., reverse=True)),
+    (False, dict(throttle=0., brake=.4, reverse=False)),
+])
+def test_step_applies_reverse_as_throttle_and_normal_negative_longitudinal_as_brake(reverse, expected):
+    controls = []
+    env = fake_step_environment(result=SafetyResult((0., -.4), target_speed_mps=0., reverse=reverse))
+    env.ego = NS(apply_control=controls.append)
+    env.carla = NS(VehicleControl=lambda **kwargs: NS(**kwargs))
+    env.step((0., 0.))
+    assert {key: getattr(controls[0], key) for key in expected} == pytest.approx(expected)

@@ -1013,7 +1013,10 @@ class CarlaEnv:
             self._demo_encounters(oracle_before.route_progress_m)
         result = self.supervisor.step(before, action, self.cfg.dt)
         steer, throttle, brake = action_to_controls(result.action)
-        self.ego.apply_control(self.carla.VehicleControl(steer=steer, throttle=throttle, brake=brake))
+        if result.reverse:  # a negative longitudinal means throttle in reverse here, not brake
+            throttle, brake = -result.action[1], 0.0
+        self.ego.apply_control(self.carla.VehicleControl(steer=steer, throttle=throttle, brake=brake,
+                                                         reverse=result.reverse))
         self._update_npcs()
         self.steps += 1
         state, observation = self._observe(self.world.tick())
