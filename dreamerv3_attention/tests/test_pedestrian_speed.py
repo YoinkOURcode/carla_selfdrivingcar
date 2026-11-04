@@ -24,10 +24,10 @@ def test_pedestrian_speed_factor_rejects_invalid_values(factor, name):
 def test_pedestrian_speed_factors_default_by_age_and_round_trip(tmp_path):
     assert Config().resolved().driving["pedestrian_speed_factor"] == .8
     assert Config().resolved().driving["vehicle_speed_factor"] == .8
-    assert Config().resolved().driving["child_pedestrian_speed_factor"] == .15
+    assert Config().resolved().driving["child_pedestrian_speed_factor"] == .5
     state = DrivingState(speed_limit_mps=8., front_hazard_m=10., pedestrian_risk=1.)
     assert compute_target_speed(state) == pytest.approx(3.)
-    assert compute_target_speed(replace(state, child_pedestrian_risk=1.)) == pytest.approx(1.2)
+    assert compute_target_speed(replace(state, child_pedestrian_risk=1.)) == pytest.approx(3.)
     cfg = Config(driving={"pedestrian_speed_factor": .6, "child_pedestrian_speed_factor": .2,
                           "vehicle_speed_factor": .7}).validate()
     path = tmp_path / "config.json"
@@ -96,7 +96,7 @@ def test_runtime_evaluation_changes_only_the_soft_pedestrian_factor():
     assert collection_scenarios(runtime) == collection_scenarios(original)
 
 
-@pytest.mark.parametrize("child,expected", [(False, 2.4), (True, .45)])
+@pytest.mark.parametrize("child,expected", [(False, 2.4), (True, 1.5)])
 def test_default_age_targets_agree_between_controller_and_supervisor(child, expected):
     state = DrivingState(speed_mps=1., speed_limit_mps=3., pedestrian_risk=1.,
                          child_pedestrian_risk=float(child))
@@ -106,17 +106,17 @@ def test_default_age_targets_agree_between_controller_and_supervisor(child, expe
     assert compute_target_speed(state) == pytest.approx(expected)
     assert result.target_speed_mps == pytest.approx(expected)
     assert action[1] == pytest.approx(.5 * (expected - 1.))
-    assert (result.action[1] < 0.) == child
+    assert result.action[1] > 0.
 
 
-@pytest.mark.parametrize("child,expected", [(False, 8.), (True, 1.5)])
+@pytest.mark.parametrize("child,expected", [(False, 8.), (True, 5.)])
 def test_nearby_sidewalk_pedestrian_has_age_specific_target(child, expected):
     import carla
 
     env, _ = fake_environment()
     actor = env.world.get_actors()[0]
     actor.attributes = {"age": "child" if child else "adult"}
-    actor.get_location = lambda: carla.Location(x=10., y=4.)
+    actor.get_location = lambda: carla.Location(x=10., y=3.)
     state, _ = env._observe(42)
     result = env.supervisor.step(state, (0., 1.), .05)
     assert state.pedestrian_risk == 1.
@@ -128,10 +128,10 @@ def test_nearby_sidewalk_pedestrian_has_age_specific_target(child, expected):
 
 def test_child_risk_alone_and_mixed_risks_use_strongest_factor_without_stacking():
     state = DrivingState(speed_limit_mps=10., child_pedestrian_risk=1.)
-    assert compute_target_speed(state) == pytest.approx(1.5)
-    assert compute_target_speed(replace(state, pedestrian_risk=1.)) == pytest.approx(1.5)
+    assert compute_target_speed(state) == pytest.approx(5.)
+    assert compute_target_speed(replace(state, pedestrian_risk=1.)) == pytest.approx(5.)
     assert compute_target_speed(replace(state, child_pedestrian_risk=.5,
-                                       pedestrian_risk=.5)) == pytest.approx(5.75)
+                                       pedestrian_risk=.5)) == pytest.approx(7.5)
 
 
 def test_stage5_runtime_config_changes_only_pedestrian_factors():
@@ -147,7 +147,7 @@ def test_vehicle_factor_preserves_following_limits_and_uses_strongest_slowdown()
     state = DrivingState(speed_limit_mps=10., vehicle_ahead=True)
     assert compute_target_speed(state) == pytest.approx(8.)
     assert compute_target_speed(replace(state, pedestrian_risk=1.)) == pytest.approx(8.)
-    assert compute_target_speed(replace(state, child_pedestrian_risk=1.)) == pytest.approx(1.5)
+    assert compute_target_speed(replace(state, child_pedestrian_risk=1.)) == pytest.approx(5.)
     assert compute_target_speed(replace(state, front_hazard_m=6.)) == pytest.approx(1.)
     assert compute_target_speed(replace(state, front_hazard_m=4.)) == 0.
     assert compute_target_speed(replace(state, front_hazard_m=1.)) == 0.
@@ -211,3 +211,20 @@ def test_external_vehicle_detection_uses_provider_objects_without_oracle_leak():
     state, _ = env._observe(42)
     assert env.oracle_state.vehicle_ahead
     assert not state.vehicle_ahead
+
+
+@pytest.mark.parametrize("y,risk,front,conflict", [
+    (4., 0., False, False),   # beyond the kerb: ignored
+    (3., 1., False, False),   # on the kerb: slow, but not a hazard in the path
+    (1., 1., True, True),     # in the car's path
+])
+def test_pedestrian_lateral_position_selects_slowdown_front_hazard_or_stop(y, risk, front, conflict):
+    import carla
+
+    env, _ = fake_environment()
+    actor = env.world.get_actors()[0]
+    actor.get_location = lambda: carla.Location(x=5., y=y)
+    state, _ = env._observe(42)
+    assert state.child_pedestrian_risk == risk
+    assert (state.front_hazard_m is not None) == front
+    assert state.pedestrian_conflict == conflict

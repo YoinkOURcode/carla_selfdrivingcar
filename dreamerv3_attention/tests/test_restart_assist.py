@@ -373,3 +373,46 @@ def test_external_provider_cannot_inject_supervisor_signal_metadata():
     env.cfg = replace(env.cfg, driving={"restart_assist_enabled": True})
     with pytest.raises(ValueError, match="may replace perception fields only"):
         env._observe(42)
+
+
+def far_red(distance=21., **settings):
+    return DrivingState(speed_mps=0., speed_limit_mps=8., red_light=True,
+                        red_light_distance_m=distance, **settings)
+
+
+def test_signal_approach_assist_moves_a_car_stopped_far_from_a_red_light():
+    driver = supervisor()
+    for _ in range(5):  # the stop is not confirmed yet
+        assert driver.step(far_red(), (0., -.1), .05).action[1] < 0
+    for _ in range(10):
+        result = driver.step(far_red(), (0., -.1), .05)
+    assert "signal_approach_assist" in result.intervention_reasons
+    assert result.action[1] == pytest.approx(DrivingConfig().restart_max_throttle)
+    # It stays latched while the car creeps, so the actor cannot stall it again.
+    moving = replace(far_red(), speed_mps=1.)
+    assert driver.step(moving, (0., -.1), .05).action[1] > 0
+
+
+@pytest.mark.parametrize("state", [
+    far_red(1.5),                           # inside the stop area: hold the red
+    far_red(21., pedestrian_conflict=True),  # hard stop wins
+    far_red(21., front_hazard_m=1.),
+    far_red(21., observations_valid=False),
+])
+def test_signal_approach_assist_never_overrides_stops(state):
+    driver = supervisor()
+    for _ in range(30):
+        result = driver.step(state, (0., -.1), .05)
+    assert result.action[1] < 0
+    assert "signal_approach_assist" not in result.intervention_reasons
+
+
+def test_signal_approach_assist_is_off_by_default_and_ends_with_the_red_light():
+    off = SafetySupervisor()
+    for _ in range(30):
+        assert off.step(far_red(), (0., -.1), .05).action[1] < 0
+    driver = supervisor()
+    for _ in range(30):
+        driver.step(far_red(), (0., -.1), .05)
+    green = replace(far_red(), red_light=False, red_light_distance_m=None)
+    assert "signal_approach_assist" not in driver.step(green, (0., -.1), .05).intervention_reasons

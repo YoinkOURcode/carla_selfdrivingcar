@@ -17,6 +17,11 @@ from .observations import pack_observation
 from .sensors import CameraConfig, RadarConfig, SensorRig, associate_depth
 from .weather import scenario_weather
 
+# Lateral distance from the car's centreline (m) within which a pedestrian...
+PEDESTRIAN_RISK_LATERAL_M = 3.5      # ...caps speed (about one lane plus the kerb)
+PEDESTRIAN_CONFLICT_LATERAL_M = 2.0  # ...forces a stop (inside the lane)
+PEDESTRIAN_LANE_M = 1.5              # ...counts as a front hazard (in the car's path)
+
 
 class _UnsupportedRoute(RuntimeError):
     pass
@@ -57,7 +62,8 @@ class CarlaEnv:
         self.supervisor = SafetySupervisor(DrivingConfig(**cfg.driving))
         self.reward_config = RewardConfig(**cfg.reward)
         self.inactivity = InactivityWatchdog(cfg.inactivity_timeout_s, cfg.inactivity_min_progress_m,
-                                            cfg.blocked_timeout_s, cfg.inactivity_grace_s)
+                                            cfg.blocked_timeout_s, cfg.inactivity_grace_s,
+                                            cfg.inactivity_stationary_s)
         try:
             settings = self.world.get_settings()
             if settings.synchronous_mode:
@@ -443,18 +449,23 @@ class CarlaEnv:
                                                  road.transform.rotation)
             else:
                 unit = self.route.delta[i] / self.route.lengths[i]
-                side = 1. if kind == "adult" else -1.
-                nx, ny = -unit[1] * side, unit[0] * side
-                curb = self.carla.Location(x=float(point[0] + nx * 4.5), y=float(point[1] + ny * 4.5),
-                                            z=road.transform.location.z)
-                sidewalk = self.map.get_waypoint(curb, lane_type=self.carla.LaneType.Sidewalk)
-                if sidewalk is None or sidewalk.transform.location.distance(curb) > 3.:
+                transform = None
+                # Preferred kerb first (adult right, child left); fall back to the other when it has no sidewalk.
+                for side in ((1., -1.) if kind == "adult" else (-1., 1.)):
+                    nx, ny = -unit[1] * side, unit[0] * side
+                    curb = self.carla.Location(x=float(point[0] + nx * 4.5), y=float(point[1] + ny * 4.5),
+                                                z=road.transform.location.z)
+                    sidewalk = self.map.get_waypoint(curb, lane_type=self.carla.LaneType.Sidewalk)
+                    if sidewalk is None or sidewalk.transform.location.distance(curb) > 3.:
+                        continue
+                    origin = sidewalk.transform.location + self.carla.Location(z=.5)
+                    if (origin.x - point[0]) * nx + (origin.y - point[1]) * ny < 2.:
+                        continue
+                    transform = self.carla.Transform(origin)
+                    direction = self.carla.Vector3D(x=float(-nx), y=float(-ny), z=0.)
+                    break
+                if transform is None:
                     continue
-                origin = sidewalk.transform.location + self.carla.Location(z=.5)
-                if (origin.x - point[0]) * nx + (origin.y - point[1]) * ny < 2.:
-                    continue
-                transform = self.carla.Transform(origin)
-                direction = self.carla.Vector3D(x=float(-nx), y=float(-ny), z=0.)
             actor = self.world.try_spawn_actor(bp, transform)
             if actor is None:
                 continue
@@ -469,6 +480,10 @@ class CarlaEnv:
             else:
                 actor.apply_control(self.carla.WalkerControl(direction=direction, speed=1.))
                 self.demo_walkers.append((actor, origin, direction, 9.))
+            return
+        if self.scenario.get("optional_encounters"):
+            # Randomized training routes cannot guarantee a sidewalk or straight road at every trigger.
+            logging.getLogger(__name__).warning("Skipping %s encounter at %.0f m: no valid spawn", kind, progress)
             return
         raise RuntimeError(f"Demonstration cannot spawn {kind} on the route ahead")
 
@@ -820,7 +835,7 @@ class CarlaEnv:
                 "walker.pedestrian.%04d" % i for i in (9, 10, 11, 12, 13, 14, 48, 49)}
             relative_velocity = np.asarray(transform.get_inverse_matrix())[:3, :3] @ [
                 av.x-velocity.x, av.y-velocity.y, av.z-velocity.z]
-            if relative[0] > 0 and abs(relative[1]) < 2.5:
+            if relative[0] > 0 and abs(relative[1]) < (PEDESTRIAN_LANE_M if pedestrian else 2.5):
                 state.front_hazard_m = min(state.front_hazard_m or float("inf"),
                                            max(0., relative[0]-bumper-box.extent.x))
                 state.vehicle_ahead |= actor.type_id.startswith("vehicle.")
@@ -833,11 +848,12 @@ class CarlaEnv:
                                           float("inf"), clearance)
             if relative[0] < 0 and abs(relative[1]) < 3:
                 state.rear_hazard_m = min(state.rear_hazard_m or float("inf"), abs(relative[0]))
-            risk = float(pedestrian and -3 < relative[0] < max(15., speed*3.) and abs(relative[1]) < 7.)
+            risk = float(pedestrian and -3 < relative[0] < max(15., speed*3.) and
+                         abs(relative[1]) < PEDESTRIAN_RISK_LATERAL_M)
             state.pedestrian_risk = max(state.pedestrian_risk, risk)
             state.child_pedestrian_risk = max(state.child_pedestrian_risk, risk * child)
             state.pedestrian_conflict |= bool(pedestrian and 0 < relative[0] < max(6., speed*2.) and
-                                              abs(relative[1]) < 3.)
+                                              abs(relative[1]) < PEDESTRIAN_CONFLICT_LATERAL_M)
             if crossing and pedestrian:
                 actor_s, actor_lateral, _ = self.route.project(
                     (location.x, location.y), local=False)
@@ -942,14 +958,14 @@ class CarlaEnv:
                 objects = objects[prediction.object_valid]
             for row in objects:
                 x, y = row[:2]*100.
-                if x > 0 and abs(y) < 2.5:
+                if x > 0 and abs(y) < (PEDESTRIAN_LANE_M if row[6] > .5 else 2.5):
                     state.front_hazard_m = min(state.front_hazard_m or float("inf"), max(0., float(x)-bumper))
                     state.vehicle_ahead |= bool(row[6] <= .5 and row[8] > .5 and
                                                 np.linalg.norm(row[:3]) <= .8)
-                if row[6] > 0.5 and -3 < x < max(15., speed*3.) and abs(y) < 7.:
+                if row[6] > 0.5 and -3 < x < max(15., speed*3.) and abs(y) < PEDESTRIAN_RISK_LATERAL_M:
                     state.pedestrian_risk = 1.
                     state.child_pedestrian_risk = max(state.child_pedestrian_risk, float(row[7] > 0.5))
-                    state.pedestrian_conflict |= bool(0 < x < max(6., speed*2.) and abs(y) < 3.)
+                    state.pedestrian_conflict |= bool(0 < x < max(6., speed*2.) and abs(y) < PEDESTRIAN_CONFLICT_LATERAL_M)
         # Side/rear/front radar hazards may influence safety in every mode.
         radars = {}
         for name, readings in bundle.radars.items():
@@ -1013,10 +1029,7 @@ class CarlaEnv:
             self._demo_encounters(oracle_before.route_progress_m)
         result = self.supervisor.step(before, action, self.cfg.dt)
         steer, throttle, brake = action_to_controls(result.action)
-        if result.reverse:  # a negative longitudinal means throttle in reverse here, not brake
-            throttle, brake = -result.action[1], 0.0
-        self.ego.apply_control(self.carla.VehicleControl(steer=steer, throttle=throttle, brake=brake,
-                                                         reverse=result.reverse))
+        self.ego.apply_control(self.carla.VehicleControl(steer=steer, throttle=throttle, brake=brake))
         self._update_npcs()
         self.steps += 1
         state, observation = self._observe(self.world.tick())
@@ -1053,8 +1066,13 @@ class CarlaEnv:
         wait = signal_wait(oracle, self.supervisor.config)
         if not wait:
             self.timed_steps = getattr(self, "timed_steps", 0) + 1
-        watchdog_reason = (None if wait else
-                           self.inactivity.update(oracle.route_progress_m, self.cfg.dt, can_move=can_move))
+        if wait:
+            self.inactivity.pause_stationary()
+            watchdog_reason = None
+        else:
+            watchdog_reason = self.inactivity.update(
+                oracle.route_progress_m, self.cfg.dt, can_move=can_move,
+                stationary=oracle.speed_mps < self.supervisor.config.stop_speed_mps)
         truncation_reason = None
         if not terminated:
             if getattr(self, "timed_steps", 0) >= self.cfg.max_episode_steps:

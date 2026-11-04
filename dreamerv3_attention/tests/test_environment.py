@@ -1112,6 +1112,7 @@ def test_npc_simulator_errors_still_propagate():
 def test_observation_skips_destroyed_npc_without_partial_hazards(failure):
     env, _ = fake_environment()
     live = env.world.get_actors()[0]
+    live.get_location = lambda: carla.Location(x=12, y=1)  # in the car's path
     dead = Mock(id=3, type_id="vehicle.dead", is_alive=failure != "not_alive", attributes={})
     dead.get_location.return_value = carla.Location(x=5.)
     dead.get_velocity.return_value = carla.Vector3D()
@@ -1148,16 +1149,3 @@ def test_red_light_queue_reuses_actor_state_instead_of_querying_actor_again():
     actor.get_location.assert_called_once()
     actor.get_velocity.assert_called_once()
     env.world.get_actors.assert_called_once()
-
-
-@pytest.mark.parametrize("reverse,expected", [
-    (True, dict(throttle=.4, brake=0., reverse=True)),
-    (False, dict(throttle=0., brake=.4, reverse=False)),
-])
-def test_step_applies_reverse_as_throttle_and_normal_negative_longitudinal_as_brake(reverse, expected):
-    controls = []
-    env = fake_step_environment(result=SafetyResult((0., -.4), target_speed_mps=0., reverse=reverse))
-    env.ego = NS(apply_control=controls.append)
-    env.carla = NS(VehicleControl=lambda **kwargs: NS(**kwargs))
-    env.step((0., 0.))
-    assert {key: getattr(controls[0], key) for key in expected} == pytest.approx(expected)

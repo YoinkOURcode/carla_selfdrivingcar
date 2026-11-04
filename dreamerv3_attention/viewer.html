@@ -183,7 +183,8 @@
         $('run').textContent=s.run||'No run found in runs/.';
         $('trainingProgress').value=evaluation?(m.total_episodes?((m.episode||0)+(m.terminated||m.truncated?1:0))/m.total_episodes:0):s.total_frames?(m.frames||0)/s.total_frames:0;
         $('trainingSteps').textContent=evaluation?(m.total_episodes?`Scenario ${(m.episode||0)+1} / ${m.total_episodes} · ${m.frames||0} environment steps`:'Waiting for an evaluation scenario'):s.total_frames?`${m.frames||0} / ${s.total_frames} environment steps · ${s.training_mode}`:'Waiting for a live run';
-        $('episode').textContent=m.episode==null?'—':String(m.episode+1);
+        // Evaluation episodes are zero-based scenario indices; training numbers match the log and metrics.
+        $('episode').textContent=m.episode==null?'—':String(evaluation?m.episode+1:m.episode);
         $('updates').textContent=m.updates??'—';$('reward').textContent=number(m.reward,3);$('episodeReturn').textContent=number(s.episode_return,3);
         $('actionSource').textContent=(m.action_source||'pending').replaceAll('_',' ');
         $('learnerMode').textContent=learnerModeText(s,m);

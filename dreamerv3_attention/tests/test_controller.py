@@ -315,13 +315,13 @@ def test_child_speed_cap_persists_briefly_after_risk_flag_clears():
     capped = supervisor.step(DrivingState(**base, pedestrian_risk=1., child_pedestrian_risk=1.), (0., 1.), .05)
     # The flag clears at the window edge: the cap must not jump up immediately.
     held = supervisor.step(DrivingState(**base), (0., 1.), .05)
-    assert held.target_speed_mps == capped.target_speed_mps < 2.
+    assert held.target_speed_mps == capped.target_speed_mps < 4.5
     for _ in range(40):
         released = supervisor.step(DrivingState(**base), (0., 1.), .05)
-    assert released.target_speed_mps > 4.
+    assert released.target_speed_mps > 5.
     supervisor.step(DrivingState(**base, pedestrian_risk=1., child_pedestrian_risk=1.), (0., 1.), .05)
     supervisor.reset()
-    assert supervisor.step(DrivingState(**base), (0., 1.), .05).target_speed_mps > 4.
+    assert supervisor.step(DrivingState(**base), (0., 1.), .05).target_speed_mps > 5.
 
 
 def test_creep_lets_a_stopped_car_leave_a_static_hazard_but_not_a_vehicle_or_pedestrian():
@@ -338,68 +338,3 @@ def test_creep_lets_a_stopped_car_leave_a_static_hazard_but_not_a_vehicle_or_ped
         result = SafetySupervisor(DrivingConfig(creep_speed_mps=1.)).step(
             DrivingState(**{**base, **override}), (.5, 1.), .05)
         assert result.action[1] < 0, override
-
-
-def _stuck(**override):
-    return DrivingState(**{**dict(speed_mps=0., speed_limit_mps=8., speed_limit_confidence=1.,
-                                  front_hazard_m=2.5, rear_hazard_m=10.), **override})
-
-
-def test_reverse_recovery_backs_out_of_a_wall_then_hands_back_control():
-    off = SafetySupervisor()
-    for _ in range(100):
-        assert not off.step(_stuck(), (-.5, 1.), .1).reverse  # disabled by default
-    driver = SafetySupervisor(DrivingConfig(reverse_after_s=2.))
-    for _ in range(19):
-        assert not driver.step(_stuck(), (-.5, 1.), .1).reverse
-    result = driver.step(_stuck(), (-.5, 1.), .1)
-    assert result.reverse and result.action == (0., -.4) and "reverse_recovery" in result.intervention_reasons
-    assert result.target_speed_mps == 0.
-    # Keeps reversing while the gap is small, then stops once the front gap is clear.
-    assert driver.step(_stuck(speed_mps=.5, front_hazard_m=4.), (-.5, 1.), .1).reverse
-    cleared = driver.step(_stuck(speed_mps=.5, front_hazard_m=6.5), (-.5, 1.), .1)
-    assert not cleared.reverse and "reverse_recovery" not in cleared.intervention_reasons
-    assert cleared.action[0] == -.5  # the policy's steering is back in control
-
-
-def test_reverse_recovery_ignores_flickering_front_return_and_stops_at_rear_hazard():
-    driver = SafetySupervisor(DrivingConfig(reverse_after_s=2.))
-    for i in range(22):  # no front return at all on the first step, so counting starts a step late
-        driver.step(_stuck(front_hazard_m=2.5 if i % 4 else None), (0., 1.), .1)
-    assert driver.step(_stuck(), (0., 1.), .1).reverse
-    assert not driver.step(_stuck(speed_mps=.5, rear_hazard_m=1.0), (0., 1.), .1).reverse
-
-
-def test_reverse_recovery_does_not_trigger_when_waiting_for_a_reason():
-    for override in (dict(red_light=True), dict(vehicle_ahead=True), dict(pedestrian_conflict=True),
-                     dict(pedestrian_risk=.5), dict(front_hazard_m=None), dict(speed_mps=1.),
-                     dict(rear_hazard_m=1.0)):
-        driver = SafetySupervisor(DrivingConfig(reverse_after_s=2.))
-        for _ in range(60):
-            assert not driver.step(_stuck(**override), (0., 1.), .1).reverse, override
-
-
-def test_reverse_recovery_is_limited_to_a_few_attempts_per_episode():
-    driver = SafetySupervisor(DrivingConfig(reverse_after_s=1., reverse_max_attempts=2, reverse_max_s=.5))
-    starts = 0
-    previous = False
-    for _ in range(400):
-        reverse = driver.step(_stuck(), (0., 1.), .1).reverse
-        starts += reverse and not previous
-        previous = reverse
-    assert starts == 2
-    driver.reset()
-    assert any(driver.step(_stuck(), (0., 1.), .1).reverse for _ in range(20))
-
-
-def test_reverse_recovery_steers_toward_the_route_heading_unless_something_is_beside_the_car():
-    def reversing(**override):
-        driver = SafetySupervisor(DrivingConfig(reverse_after_s=1.))
-        for _ in range(30):
-            result = driver.step(_stuck(**override), (0., 1.), .1)
-            if result.reverse:
-                return result.action[0]
-    assert reversing(heading_error_rad=.3) == pytest.approx(.3)
-    assert reversing(heading_error_rad=-1.) == -.5  # capped
-    assert reversing(heading_error_rad=1.) == .5
-    assert reversing(heading_error_rad=.3, side_hazard_m=1.5, left_hazard_m=1.5) == 0.

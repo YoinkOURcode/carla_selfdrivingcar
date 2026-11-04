@@ -83,10 +83,10 @@ class DrivingConfig:
     restart_timeout_s: float = 5.0
     restart_handover_s: float = 0.5
     pedestrian_speed_factor: float = 0.8
-    child_pedestrian_speed_factor: float = 0.15
+    child_pedestrian_speed_factor: float = 0.5
     # Keep the pedestrian speed cap this long after the risk flag clears, so a
     # flag flickering at the edge of its window cannot launch and re-brake.
-    pedestrian_risk_hold_s: float = 1.5
+    pedestrian_risk_hold_s: float = 0.5
     vehicle_speed_factor: float = 0.8
     # Let the car creep away from a static obstacle (not a vehicle) that is at
     # least creep_min_gap_m ahead, instead of holding it stopped at the
@@ -94,20 +94,6 @@ class DrivingConfig:
     # turn out. 0 disables it.
     creep_speed_mps: float = 0.0
     creep_min_gap_m: float = 1.5
-    # The action space has no reverse, so a car stopped facing a wall inside the
-    # following gap can never turn out (the steering does nothing at 0 m/s).
-    # After reverse_after_s stopped in front of a static hazard, back up in a
-    # straight line until the gap reaches reverse_clear_gap_m. 0 disables it.
-    reverse_after_s: float = 0.0
-    reverse_throttle: float = 0.4
-    reverse_max_s: float = 3.0
-    reverse_clear_gap_m: float = 6.0
-    reverse_min_rear_m: float = 1.5
-    reverse_max_attempts: int = 5
-    # Backing up flips the steering effect, so positive steer reduces a positive
-    # heading error. Steer by the heading error (capped) so the car turns toward
-    # the route instead of reversing straight back along a wrong heading.
-    reverse_max_steer: float = 0.5
 
 
 @dataclass
@@ -119,7 +105,6 @@ class SafetyResult:
     restart_assist_phase: str = "disabled"
     restart_assist_event: Optional[str] = None
     restart_assist_elapsed_s: float = 0.0
-    reverse: bool = False
 
 
 def _clamp(value: float, low: float, high: float) -> float:
@@ -288,14 +273,14 @@ class SafetySupervisor:
         self._restart_phase = "disabled" if not config.restart_assist_enabled else "idle"
         self._risk_hold_s = 0.0
         self._held_risk = (0.0, 0.0)
-        self._front_hold_s = self._stuck_s = self._reverse_left_s = 0.0
-        self._reverse_attempts = 0
+        self._approach_stopped_s = 0.0
+        self._approach_assist = False
 
     def reset(self) -> None:
         self._risk_hold_s = 0.0
         self._held_risk = (0.0, 0.0)
-        self._front_hold_s = self._stuck_s = self._reverse_left_s = 0.0
-        self._reverse_attempts = 0
+        self._approach_stopped_s = 0.0
+        self._approach_assist = False
         self.crossing_phase = "clear"
         self._crossing_id = None
         self._stopped_s = self._clear_s = 0.0
@@ -312,7 +297,7 @@ class SafetySupervisor:
     def longitudinal_reference(self, state: DrivingState, dt_s: float) -> float:
         """Speed feedback with the same stops, without advancing live state."""
         supervisor = copy.copy(self)
-        supervisor.config = replace(self.config, restart_assist_enabled=False, reverse_after_s=0.0)
+        supervisor.config = replace(self.config, restart_assist_enabled=False)
         result = supervisor.step(state, (0., 1.), dt_s)
         if result.target_speed_mps <= 0:
             return -1.
@@ -344,12 +329,6 @@ class SafetySupervisor:
             self._risk_hold_s -= dt
             state = replace(state, pedestrian_risk=self._held_risk[0],
                             child_pedestrian_risk=self._held_risk[1])
-        if self._reverse_recovery(state, dt):
-            self.intervention_count += 1
-            return SafetyResult((self._reverse_steer(state), -self.config.reverse_throttle), 0.0,
-                                ("reverse_recovery",),
-                                self.crossing_phase, self._restart_phase, None,
-                                self._restart_elapsed_s, reverse=True)
 
         # Side hazards constrain steering, but do not cause blind braking.
         if state.side_hazard_m is not None and 0 <= state.side_hazard_m < 3.0:
@@ -436,6 +415,22 @@ class SafetySupervisor:
                     target = 0.0
                 longitudinal = -1.0
                 reasons.append("red_light_stop")
+        # A car that halts well short of a red light, with the speed target
+        # still open, would otherwise sit there until the watchdog ends the
+        # episode. Once confirmed stopped, apply bounded throttle until the
+        # stop area is reached; the speed target and later hard stops still win.
+        approaching = (self.config.restart_assist_enabled and state.red_light and
+                       not self._red_stopping and target > 0.5)
+        if not approaching:
+            self._approach_stopped_s, self._approach_assist = 0.0, False
+        else:
+            if state.speed_mps <= self.config.stop_speed_mps:
+                self._approach_stopped_s += dt
+            if self._approach_stopped_s >= self.config.restart_stop_confirm_s:
+                self._approach_assist = True
+            if self._approach_assist:
+                longitudinal = max(longitudinal, self.config.restart_max_throttle)
+                reasons.append("signal_approach_assist")
         if state.yellow_light and self._yellow_stop:
             d = _valid_nonnegative(state.yellow_light_distance_m)
             self._yellow_braking = signal_stop_required(target_state, d, self.config, dt)
@@ -471,41 +466,6 @@ class SafetySupervisor:
             self.intervention_count += 1
         return SafetyResult((steer, longitudinal), target, tuple(reasons), self.crossing_phase,
                             self._restart_phase, event, self._restart_elapsed_s)
-
-    def _reverse_recovery(self, state: DrivingState, dt: float) -> bool:
-        """True while backing away from a static hazard the car is stopped facing."""
-        config = self.config
-        if config.reverse_after_s <= 0:
-            return False
-        front = _valid_nonnegative(state.front_hazard_m)
-        rear = _valid_nonnegative(state.rear_hazard_m)
-        if self._reverse_left_s > 0:
-            self._reverse_left_s -= dt
-            if (self._reverse_left_s > 0 and not (front is not None and front >= config.reverse_clear_gap_m) and
-                    not (rear is not None and rear < config.reverse_min_rear_m)):
-                return True
-            self._reverse_left_s = self._stuck_s = 0.0
-        # The front return flickers in and out while stopped, so remember it briefly.
-        self._front_hold_s = 1.0 if front is not None else max(0.0, self._front_hold_s - dt)
-        waiting = (state.red_light or state.yellow_light or state.pedestrian_conflict or
-                   state.crossing_occupied or state.vehicle_ahead or self.crossing_phase == "stopped" or
-                   state.pedestrian_risk > 0 or state.child_pedestrian_risk > 0)
-        blocked = (self._front_hold_s > 0 and state.speed_mps <= config.stop_speed_mps and not waiting)
-        self._stuck_s = self._stuck_s + dt if blocked else 0.0
-        if (self._stuck_s >= config.reverse_after_s and self._reverse_attempts < config.reverse_max_attempts and
-                (rear is None or rear >= config.reverse_min_rear_m)):
-            self._reverse_attempts += 1
-            self._reverse_left_s = config.reverse_max_s
-            return True
-        return False
-
-    def _reverse_steer(self, state: DrivingState) -> float:
-        side = _valid_nonnegative(state.side_hazard_m)
-        heading = state.heading_error_rad
-        if (side is not None and side < 2.0) or not math.isfinite(heading):
-            return 0.0  # the swinging rear could hit what is beside the car
-        limit = self.config.reverse_max_steer
-        return _clamp(heading, -limit, limit)
 
     def _cancel_restart(self, reason: str) -> Optional[str]:
         """Clear transient restart timing while retaining one-attempt state."""

@@ -14,12 +14,26 @@ from torchrl.objectives import DreamerV3ActorLoss, DreamerV3Loss, DreamerV3Model
 from torchrl.trainers.algorithms import DreamerV3OptimizationStepper, DreamerV3Optimizer
 
 
+class PixelAugment(nn.Module):
+    """Corrupt the encoder's image input only while `active` (training updates)."""
+
+    def __init__(self, probability):
+        super().__init__()
+        self.probability, self.active = probability, False
+
+    def forward(self, pixels):
+        return augment_pixels(pixels, self.probability) if self.active else pixels
+
+
 class FusionEncoder(nn.Module):
     """One-query cross attention is linear in token count; RSSM owns time."""
 
     def __init__(self, cfg, token_count):
         super().__init__()
         self.attention = cfg.attention
+        self.use_pixels = cfg.use_pixels
+        # Adds no parameters or state, so old checkpoints still load.
+        self.augment = PixelAugment(cfg.pixel_augment)
         self.image = DreamerV3ImageEncoder(depth=cfg.image_depth, mults=(1, 2, 4))
         self.image_projection = nn.Linear(self.image.output_features((3, cfg.image_size, cfg.image_size)), cfg.hidden)
         self.token_projection = nn.Linear(16, cfg.hidden)
@@ -35,8 +49,13 @@ class FusionEncoder(nn.Module):
         # Invalid rows never enter a projection, including NaN sensor payloads.
         mask = mask.bool() & torch.isfinite(tokens).all(-1)
         tokens = torch.where(mask[..., None], tokens, 0)
-        image = self.image_projection(self.image(pixels))
         features = self.token_projection(tokens)
+        if self.use_pixels:
+            image = self.image_projection(self.image(self.augment(pixels)))
+        else:
+            # Tokens only: the image slot stays empty and is masked out below.
+            image = torch.zeros_like(features[..., 0, :])
+            pixels_valid = torch.zeros_like(pixels_valid)
         null = torch.zeros_like(image).unsqueeze(-2)
         features = torch.cat((image.unsqueeze(-2), features, null), -2) + self.positions
         pixels_valid = pixels_valid.bool().reshape(*batch, 1)
@@ -74,15 +93,66 @@ def expert_actor_loss(actor, posterior, sample):
     return -actor.get_dist(features).log_prob(targets).mean()
 
 
-def corrective_steering_loss(actor, posterior, sample):
-    """Teach the actor route feedback on its own replay states, not just demos."""
+def route_point(sample):
+    """Valid mask and the 5 m route point (x, y in metres) of each replay step."""
     tokens = sample["next", "tokens"].detach()
     valid = (sample["next", "mask"][..., 0].bool() & sample["next", "mask"][..., 1].bool() &
              (tokens[..., 1, 15] == -1) & torch.isfinite(tokens[..., 1, :2]).all(-1) &
              (tokens[..., 0, 15] > 0.5) & ~sample["next", "done"][..., 0].bool())
+    return valid, tokens[..., 1, 0] * 100., tokens[..., 1, 1] * 100.
+
+
+def route_aux_loss(world_posterior, sample):
+    """Make the latent keep the near route point (metres), whatever the image looks like.
+
+    The structured decoder reconstructs every token with equal weight, so the two
+    numbers that steering depends on are a tiny share of its loss. Gradients reach
+    the encoder and RSSM through the existing decoder; no parameters are added.
+    """
+    valid, x, y = route_point(sample)
+    reco = world_posterior["next", "reco_structured"]
+    if not valid.any():
+        return reco.new_zeros(())
+    # structured layout: all tokens flattened (16 features each), then the mask
+    error = reco[..., 16:18] * 100. - torch.stack((x, y), -1)
+    return (error[valid] ** 2).mean()
+
+
+def augment_pixels(pixels, probability):
+    """Weather-like corruption of uint8 [batch, time, 3, H, W] images.
+
+    One draw per sequence (batch row), since weather does not change within an
+    episode. Haze, contrast and brightness, blur, noise and rain streaks, so the
+    encoder cannot rely on clear-weather appearance. Streaks and noise are drawn
+    per frame because rain moves.
+    """
+    if probability <= 0:
+        return pixels
+    batch, time, channels, height, width = pixels.shape
+    x = pixels.float()
+    device = pixels.device
+    row = lambda low=0., high=1.: low + (high - low) * torch.rand(batch, 1, 1, 1, 1, device=device)
+    mean = x.mean((-3, -2, -1), keepdim=True)
+    y = (x - mean) * row(.6, 1.2) + mean * row(.6, 1.2)
+    haze = row(0., .6)
+    y = (1 - haze) * y + haze * row(120., 230.)
+    blurred = torch.nn.functional.avg_pool2d(y.reshape(-1, channels, height, width), 3, 1, 1).reshape(y.shape)
+    blur = (row() < .5).float()
+    y = blur * blurred + (1 - blur) * y
+    y = y + torch.randn_like(y) * row(0., 10.)
+    streaks = (torch.rand(batch, time, 1, height, width, device=device) > .985).float()
+    streaks = torch.nn.functional.avg_pool2d(streaks.reshape(-1, 1, height, width), (5, 1), 1, (2, 0))
+    streaks = (streaks.reshape(batch, time, 1, height, width) * 5).clamp(max=1)
+    y = y + (row() < .5).float() * row() * 80. * streaks
+    keep = (row() < probability).float()
+    return (keep * y + (1 - keep) * x).clamp(0, 255).round().to(pixels.dtype)
+
+
+def corrective_steering_loss(actor, posterior, sample):
+    """Teach the actor route feedback on its own replay states, not just demos."""
+    valid, x, y = route_point(sample)
     if not valid.any():
         return posterior["state"].new_zeros(())
-    x, y = tokens[..., 1, 0] * 100., tokens[..., 1, 1] * 100.
     # Same pure-pursuit reference as RouteController, before safety limits.
     steer = (torch.atan2(2. * 2.8 * y, (x*x+y*y).clamp_min(1.)) / 0.7).clamp(-0.999, 0.999)
     features = posterior.detach()[valid].clone()
@@ -119,8 +189,12 @@ class ExpertRegularizedLoss(DreamerV3Loss):
     """Add an optional supervised actor term using aligned real expert data."""
 
     def __init__(self, *args, actor_bc_weight=0., actor_steering_bc_weight=0.,
-                 actor_longitudinal_bc_weight=0., **kwargs):
+                 actor_longitudinal_bc_weight=0., route_aux_weight=0., **kwargs):
         super().__init__(*args, **kwargs)
+        self.route_aux_weight = route_aux_weight
+        self._world_posterior = None
+        # The parent only returns a detached posterior; the aux loss needs the live one.
+        self.model_loss.register_forward_hook(lambda module, args, output: setattr(self, "_world_posterior", output[1]))
         self.actor_bc_weight = actor_bc_weight
         self.actor_steering_bc_weight = actor_steering_bc_weight
         self.actor_longitudinal_bc_weight = actor_longitudinal_bc_weight
@@ -130,7 +204,7 @@ class ExpertRegularizedLoss(DreamerV3Loss):
         keys = super().in_keys
         if getattr(self, "actor_bc_weight", 0.):
             keys = [*keys, "expert"]
-        if getattr(self, "actor_steering_bc_weight", 0.):
+        if getattr(self, "actor_steering_bc_weight", 0.) or getattr(self, "route_aux_weight", 0.):
             for key in (("next", "tokens"), ("next", "mask")):
                 if key not in keys:
                     keys.append(key)
@@ -140,6 +214,10 @@ class ExpertRegularizedLoss(DreamerV3Loss):
 
     def forward(self, sample):
         result = super().forward(sample)
+        if self.route_aux_weight:
+            aux = route_aux_loss(self._world_posterior, sample)
+            result["loss_model_reco"] = result["loss_model_reco"] + self.route_aux_weight * aux
+            result["route_aux_loss"] = aux.detach()
         if self.actor_bc_weight:
             bc = expert_actor_loss(self.actor_loss.actor_model,
                                    result[self.tensor_keys.replay_context], sample)
@@ -227,8 +305,11 @@ class Agent:
         model_loss = DreamerV3ModelLoss(self.world, kl_mode="separate", lambda_dynamic=1.0,
                                         lambda_representation=0.1, unimix=0.01, free_bits=1.0,
                                         lambda_continue=1.0, num_reward_bins=cfg.bins,
-                                        reco_symlog=[False, False], detach_output=False)
-        model_loss.set_keys(pixels=["pixels", "structured"], reco_pixels=["reco_pixels", "reco_structured"])
+                                        reco_symlog=[False, False] if cfg.use_pixels else [False],
+                                        detach_output=False)
+        # The image decoder stays in the graph so checkpoints keep their layout; without pixels it has no loss.
+        model_loss.set_keys(pixels=["pixels", "structured"] if cfg.use_pixels else ["structured"],
+                            reco_pixels=["reco_pixels", "reco_structured"] if cfg.use_pixels else ["reco_structured"])
         actor_loss = DreamerV3ActorLoss(self.actor, self.value, mb_env, continuation_model=continuation,
                                        imagination_horizon=cfg.horizon)
         actor_loss.make_value_estimator(gamma=cfg.gamma, lmbda=0.95)
@@ -238,7 +319,8 @@ class Agent:
                                          replay_value_loss_weight=0.0,
                                          actor_bc_weight=cfg.actor_bc_weight,
                                          actor_steering_bc_weight=cfg.actor_steering_bc_weight,
-                                         actor_longitudinal_bc_weight=cfg.actor_longitudinal_bc_weight).to(self.device)
+                                         actor_longitudinal_bc_weight=cfg.actor_longitudinal_bc_weight,
+                                         route_aux_weight=cfg.route_aux_weight).to(self.device)
         updater = SoftUpdate(value_loss, tau=0.02)
         optimizer = DreamerV3Optimizer(self.loss.parameters(), lr=cfg.learning_rate, warmup_steps=cfg.warmup_updates)
         self.stepper = DreamerV3OptimizationStepper(self.loss, optimizer, updater,
@@ -266,6 +348,13 @@ class Agent:
     def update(self, sample, *, world_model_only=False):
         sample = sample.to(self.device)
         sample["next", "structured"] = structured_target(sample["next", "tokens"], sample["next", "mask"])
+        self.encoder.augment.active = True
+        try:
+            return self._update(sample, world_model_only)
+        finally:
+            self.encoder.augment.active = False
+
+    def _update(self, sample, world_model_only):
         if world_model_only:
             # Reuse the upstream model objective and optimizer, leaving actor,
             # critic, return normalization and target-update state untouched.

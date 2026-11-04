@@ -34,12 +34,20 @@ class Config:
     expert_episode_interval: int = 0
     actor_steering_bc_weight: float = 0.0
     actor_longitudinal_bc_weight: float = 0.0
+    # Probability that a replay sequence gets weather-like image corruption in the
+    # encoder input (reconstruction target stays clean). 0 disables it.
+    pixel_augment: float = 0.0
+    # False hides the camera image from the agent (tokens only) and drops the pixel reconstruction loss.
+    use_pixels: bool = True
+    # Weight of an extra world-model loss on the reconstructed near route point.
+    route_aux_weight: float = 0.0
     steps: int = 10000
     max_episode_steps: int = 1000
     inactivity_timeout_s: float = 15.0
     inactivity_min_progress_m: float = 0.5
     blocked_timeout_s: float = 60.0
     inactivity_grace_s: float = 2.0
+    inactivity_stationary_s: float = 7.0
     checkpoint_every: int = 500
     host: str = "127.0.0.1"
     port: int = 2000
@@ -101,6 +109,12 @@ class Config:
             raise ValueError("actor_steering_bc_weight must be finite and nonnegative")
         if not math.isfinite(self.actor_longitudinal_bc_weight) or self.actor_longitudinal_bc_weight < 0:
             raise ValueError("actor_longitudinal_bc_weight must be finite and nonnegative")
+        if not math.isfinite(self.pixel_augment) or not 0 <= self.pixel_augment <= 1:
+            raise ValueError("pixel_augment must be a probability")
+        if not isinstance(self.use_pixels, bool):
+            raise ValueError("use_pixels must be a boolean")
+        if not math.isfinite(self.route_aux_weight) or self.route_aux_weight < 0:
+            raise ValueError("route_aux_weight must be finite and nonnegative")
         if self.actor_bc_weight and self.warmup_policy != "controller":
             raise ValueError("actor_bc_weight requires controller warmup")
         if not isinstance(self.expert_episode_interval, int) or self.expert_episode_interval < 0:
@@ -142,7 +156,7 @@ class Config:
         from .sensors import CameraConfig, RadarConfig
 
         InactivityWatchdog(self.inactivity_timeout_s, self.inactivity_min_progress_m,
-                           self.blocked_timeout_s, self.inactivity_grace_s)
+                           self.blocked_timeout_s, self.inactivity_grace_s, self.inactivity_stationary_s)
         CameraConfig(**self.camera)
         RadarConfig(**self.radar)
         driving = DrivingConfig(**self.driving)
@@ -185,7 +199,9 @@ class Config:
         from .driving import DrivingConfig, RewardConfig
         from .sensors import CameraConfig, RadarConfig
 
-        return replace(self, driving=asdict(DrivingConfig(**self.driving)),
+        # Checkpoints saved while reverse recovery existed still carry its keys.
+        driving = {k: v for k, v in self.driving.items() if not k.startswith("reverse_")}
+        return replace(self, driving=asdict(DrivingConfig(**driving)),
                        reward=asdict(RewardConfig(**self.reward)),
                        camera=asdict(CameraConfig(**{"sensor_tick": self.dt, **self.camera})),
                        radar=asdict(RadarConfig(**{"sensor_tick": self.dt, **self.radar})))

@@ -11,10 +11,15 @@ class InactivityWatchdog:
     The independent long window runs across blocked periods. Both use net
     route progress over a rolling interval, so reversing or small oscillations
     do not keep restarting a timer.
+
+    A separate stationary timer ends the episode when the car stays stopped
+    for ``stationary_timeout_s``, whatever the reason; the caller pauses it
+    while the car waits at a traffic signal.
     """
 
     def __init__(self, timeout_s=15., min_progress_m=.5,
-                 blocked_timeout_s=60., grace_s=2.):
+                 blocked_timeout_s=60., grace_s=2., stationary_timeout_s=7.):
+        self.stationary_timeout_s = self._positive_finite(stationary_timeout_s, "stationary_timeout_s")
         self.timeout_s = self._positive_finite(timeout_s, "timeout_s")
         self.min_progress_m = self._positive_finite(min_progress_m, "min_progress_m")
         self.blocked_timeout_s = self._positive_finite(blocked_timeout_s, "blocked_timeout_s")
@@ -50,6 +55,11 @@ class InactivityWatchdog:
         self._long_history = deque([(0., progress)] if self._tracking else ())
         self._short_history = deque([(0., progress)] if self._tracking else ())
         self._short_active = self._tracking
+        self._stationary_s = 0.
+
+    def pause_stationary(self):
+        """Restart the stationary timer, e.g. while waiting at a traffic signal."""
+        self._stationary_s = 0.
 
     @staticmethod
     def _window_progress(history, now_s, window_s):
@@ -70,8 +80,15 @@ class InactivityWatchdog:
         while len(history) > 2 and history[1][0] <= cutoff_s:
             history.popleft()
 
-    def update(self, progress_m, dt_s, *, can_move):
+    def update(self, progress_m, dt_s, *, can_move, stationary=False):
         """Advance simulated time and return a truncation reason if stalled."""
+        reason = self._update_progress(progress_m, dt_s, can_move)
+        self._stationary_s = self._stationary_s + float(dt_s) if stationary else 0.
+        if reason is None and self._stationary_s > self.stationary_timeout_s:
+            return "inactivity_timeout"
+        return reason
+
+    def _update_progress(self, progress_m, dt_s, can_move):
         progress = self._finite(progress_m, "progress_m")
         dt = self._positive_finite(dt_s, "dt_s")
         self._elapsed_s += dt

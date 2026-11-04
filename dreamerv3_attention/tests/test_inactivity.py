@@ -134,3 +134,22 @@ def test_progress_validation_and_temporal_history_survives_small_dt():
     assert len(watchdog._short_history) > 4096
     assert advance(watchdog, 1.0002, 3.) == "inactivity_timeout"
 
+
+
+def test_stationary_timer_fires_even_when_movement_is_blocked():
+    dog = InactivityWatchdog()
+    reasons = [dog.update(0., .05, can_move=False, stationary=True) for _ in range(141)]
+    assert reasons[139] is None  # 7.0 s
+    assert reasons[140] == "inactivity_timeout"
+
+
+def test_motion_or_signal_pause_restarts_the_stationary_timer():
+    dog = InactivityWatchdog()
+    for _ in range(100):
+        dog.update(0., .05, can_move=False, stationary=True)
+    dog.update(0., .05, can_move=False, stationary=False)
+    for _ in range(100):
+        assert dog.update(0., .05, can_move=False, stationary=True) is None
+    dog.pause_stationary()
+    for _ in range(100):
+        assert dog.update(0., .05, can_move=False, stationary=True) is None
