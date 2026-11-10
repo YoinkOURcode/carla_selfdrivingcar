@@ -2591,6 +2591,230 @@
         "tensordict": "0.14.3",
         "carla": "0.9.16"
       }
+    },
+    {
+      "id": "clear",
+      "path": "/home/kevinkoh/Projects/CVDL/Project/carla/runs/experiment_27/eval_town02/results_no_pixels_2_assist_rerun/clear",
+      "algorithm": "torchrl-dreamerv3",
+      "purpose": "evaluate",
+      "budget_seconds": 1500.0,
+      "seed": 7,
+      "attention": true,
+      "schema": "carla-dreamerv3-tokens-v2",
+      "versions": {
+        "torch": "2.7.1",
+        "torchrl": "0.14.1",
+        "tensordict": "0.14.3",
+        "carla": "0.9.16"
+      }
+    },
+    {
+      "id": "clear",
+      "path": "/home/kevinkoh/Projects/CVDL/Project/carla/runs/experiment_27/eval_town02/results_final_evaluation/clear",
+      "algorithm": "torchrl-dreamerv3",
+      "purpose": "evaluate",
+      "budget_seconds": 1500.0,
+      "seed": 7,
+      "attention": true,
+      "schema": "carla-dreamerv3-tokens-v2",
+      "versions": {
+        "torch": "2.7.1",
+        "torchrl": "0.14.1",
+        "tensordict": "0.14.3",
+        "carla": "0.9.16"
+      }
+    },
+    {
+      "id": "wet",
+      "path": "/home/kevinkoh/Projects/CVDL/Project/carla/runs/experiment_27/eval_town02/results_final_evaluation/wet",
+      "algorithm": "torchrl-dreamerv3",
+      "purpose": "evaluate",
+      "budget_seconds": 1500.0,
+      "seed": 7,
+      "attention": true,
+      "schema": "carla-dreamerv3-tokens-v2",
+      "versions": {
+        "torch": "2.7.1",
+        "torchrl": "0.14.1",
+        "tensordict": "0.14.3",
+        "carla": "0.9.16"
+      }
+    },
+    {
+      "id": "night",
+      "path": "/home/kevinkoh/Projects/CVDL/Project/carla/runs/experiment_27/eval_town02/results_final_evaluation/night",
+      "algorithm": "torchrl-dreamerv3",
+      "purpose": "evaluate",
+      "budget_seconds": 1500.0,
+      "seed": 7,
+      "attention": true,
+      "schema": "carla-dreamerv3-tokens-v2",
+      "versions": {
+        "torch": "2.7.1",
+        "torchrl": "0.14.1",
+        "tensordict": "0.14.3",
+        "carla": "0.9.16"
+      }
+    },
+    {
+      "id": "lowvis",
+      "path": "/home/kevinkoh/Projects/CVDL/Project/carla/runs/experiment_27/eval_town02/results_final_evaluation/lowvis",
+      "algorithm": "torchrl-dreamerv3",
+      "purpose": "evaluate",
+      "budget_seconds": 1500.0,
+      "seed": 7,
+      "attention": true,
+      "schema": "carla-dreamerv3-tokens-v2",
+      "versions": {
+        "torch": "2.7.1",
+        "torchrl": "0.14.1",
+        "tensordict": "0.14.3",
+        "carla": "0.9.16"
+      }
+    },
+    {
+      "id": "clear",
+      "path": "/home/kevinkoh/Projects/CVDL/Project/carla/runs/experiment_27/eval_town02/results_final_evaluation_2/clear",
+      "algorithm": "torchrl-dreamerv3",
+      "purpose": "evaluate",
+      "budget_seconds": 1500.0,
+      "seed": 7,
+      "attention": true,
+      "schema": "carla-dreamerv3-tokens-v2",
+      "versions": {
+        "torch": "2.7.1",
+        "torchrl": "0.14.1",
+        "tensordict": "0.14.3",
+        "carla": "0.9.16"
+      }
+    },
+    {
+      "id": "clear",
+      "path": "/home/kevinkoh/Projects/CVDL/Project/carla/runs/experiment_27/eval_town02/results_final_evaluation_3/clear",
+      "algorithm": "torchrl-dreamerv3",
+      "purpose": "evaluate",
+      "budget_seconds": 1500.0,
+      "seed": 7,
+      "attention": true,
+      "schema": "carla-dreamerv3-tokens-v2",
+      "versions": {
+        "torch": "2.7.1",
+        "torchrl": "0.14.1",
+        "tensordict": "0.14.3",
+        "carla": "0.9.16"
+      }
+    },
+    {
+      "id": "wet",
+      "path": "/home/kevinkoh/Projects/CVDL/Project/carla/runs/experiment_27/eval_town02/results_final_evaluation_3/wet",
+      "algorithm": "torchrl-dreamerv3",
+      "purpose": "evaluate",
+      "budget_seconds": 1500.0,
+      "seed": 7,
+      "attention": true,
+      "schema": "carla-dreamerv3-tokens-v2",
+      "versions": {
+        "torch": "2.7.1",
+        "torchrl": "0.14.1",
+        "tensordict": "0.14.3",
+        "carla": "0.9.16"
+      }
+    },
+    {
+      "id": "night",
+      "path": "/home/kevinkoh/Projects/CVDL/Project/carla/runs/experiment_27/eval_town02/results_final_evaluation_3/night",
+      "algorithm": "torchrl-dreamerv3",
+      "purpose": "evaluate",
+      "budget_seconds": 1500.0,
+      "seed": 7,
+      "attention": true,
+      "schema": "carla-dreamerv3-tokens-v2",
+      "versions": {
+        "torch": "2.7.1",
+        "torchrl": "0.14.1",
+        "tensordict": "0.14.3",
+        "carla": "0.9.16"
+      }
+    },
+    {
+      "id": "lowvis",
+      "path": "/home/kevinkoh/Projects/CVDL/Project/carla/runs/experiment_27/eval_town02/results_final_evaluation_3/lowvis",
+      "algorithm": "torchrl-dreamerv3",
+      "purpose": "evaluate",
+      "budget_seconds": 1500.0,
+      "seed": 7,
+      "attention": true,
+      "schema": "carla-dreamerv3-tokens-v2",
+      "versions": {
+        "torch": "2.7.1",
+        "torchrl": "0.14.1",
+        "tensordict": "0.14.3",
+        "carla": "0.9.16"
+      }
+    },
+    {
+      "id": "clear",
+      "path": "/home/kevinkoh/Projects/CVDL/Project/carla/runs/experiment_27/eval_town02/results_runs/experiment_27/final_evaluation/clear",
+      "algorithm": "torchrl-dreamerv3",
+      "purpose": "evaluate",
+      "budget_seconds": 1500.0,
+      "seed": 7,
+      "attention": true,
+      "schema": "carla-dreamerv3-tokens-v2",
+      "versions": {
+        "torch": "2.7.1",
+        "torchrl": "0.14.1",
+        "tensordict": "0.14.3",
+        "carla": "0.9.16"
+      }
+    },
+    {
+      "id": "wet",
+      "path": "/home/kevinkoh/Projects/CVDL/Project/carla/runs/experiment_27/eval_town02/results_runs/experiment_27/final_evaluation/wet",
+      "algorithm": "torchrl-dreamerv3",
+      "purpose": "evaluate",
+      "budget_seconds": 1500.0,
+      "seed": 7,
+      "attention": true,
+      "schema": "carla-dreamerv3-tokens-v2",
+      "versions": {
+        "torch": "2.7.1",
+        "torchrl": "0.14.1",
+        "tensordict": "0.14.3",
+        "carla": "0.9.16"
+      }
+    },
+    {
+      "id": "clear",
+      "path": "/home/kevinkoh/Projects/CVDL/Project/carla/runs/experiment_27/eval_town02/results_runs/experiment_27/final_evaluation_2/clear",
+      "algorithm": "torchrl-dreamerv3",
+      "purpose": "evaluate",
+      "budget_seconds": 1500.0,
+      "seed": 7,
+      "attention": true,
+      "schema": "carla-dreamerv3-tokens-v2",
+      "versions": {
+        "torch": "2.7.1",
+        "torchrl": "0.14.1",
+        "tensordict": "0.14.3",
+        "carla": "0.9.16"
+      }
+    },
+    {
+      "id": "wet",
+      "path": "/home/kevinkoh/Projects/CVDL/Project/carla/runs/experiment_27/eval_town02/results_runs/experiment_27/final_evaluation_2/wet",
+      "algorithm": "torchrl-dreamerv3",
+      "purpose": "evaluate",
+      "budget_seconds": 1500.0,
+      "seed": 7,
+      "attention": true,
+      "schema": "carla-dreamerv3-tokens-v2",
+      "versions": {
+        "torch": "2.7.1",
+        "torchrl": "0.14.1",
+        "tensordict": "0.14.3",
+        "carla": "0.9.16"
+      }
     }
   ]
 }

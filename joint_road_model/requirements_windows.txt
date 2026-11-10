@@ -1,0 +1,5 @@
+ultralytics==8.4.171
+opencv-python
+numpy<2
+pillow
+flask

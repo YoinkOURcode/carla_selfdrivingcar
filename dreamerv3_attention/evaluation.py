@@ -350,6 +350,12 @@ def _rms(values):
     return math.sqrt(sum(value * value for value in values) / len(values)) if values else 0.0
 
 
+def _attention_weights(agent):
+    """Pooling weights from the agent's latest inference, or None without attention."""
+    weights = getattr(getattr(agent, "encoder", None), "last_attention", None)
+    return None if weights is None else weights.detach().cpu().numpy().reshape(-1)
+
+
 def evaluate(cfg, agent, env_factory=None, episodes: Optional[int] = None,
              deterministic: bool = True, *, fixed_scenario=False, trace_path=None, observer=None,
              action_source="actor") -> dict:
@@ -377,6 +383,7 @@ def evaluate(cfg, agent, env_factory=None, episodes: Optional[int] = None,
             raise ValueError("episodes must be positive")
         suite = suite[:episodes]
     results, unsupported, frames = [], [], 0
+    policy_attention = bool(getattr(getattr(agent, "encoder", None), "attention", False))
     for episode, scenario in enumerate(suite):
         if not scenario.get("supported", True):
             unsupported.append({"name": scenario["name"], "category": scenario["category"],
@@ -397,16 +404,24 @@ def evaluate(cfg, agent, env_factory=None, episodes: Optional[int] = None,
             if observer is not None:
                 observer.publish(env, observation, {"frames": frames, "episode": episode,
                                                     "total_episodes": len(suite), "scenario": scenario["name"]},
-                                 reset=True)
+                                 reset=True, attention_enabled=policy_attention)
             infos = []
+            shown = None
             terminated = truncated = False
             while not (terminated or truncated):
                 inference_started = time.perf_counter()
                 action, carry = agent.act(observation, carry, deterministic)
                 inference_latency = time.perf_counter() - inference_started
+                attention = _attention_weights(agent)
+                if observer is not None and shown is not None:
+                    # Publish the last completed step before stepping again: the frame, its
+                    # objects and these weights then describe the same observation.
+                    observer.publish(env, observation, shown, attention=attention,
+                                     attention_enabled=policy_attention)
                 observation, reward, terminated, truncated, info = env.step(action)
                 info = dict(info)
                 info["policy_inference_latency_s"] = inference_latency
+                info["attention"] = None if attention is None else attention.tolist()
                 if hasattr(carry, "set"):
                     import torch
 
@@ -418,14 +433,15 @@ def evaluate(cfg, agent, env_factory=None, episodes: Optional[int] = None,
                                                        device=carry_device))
                 infos.append(info)
                 frames += 1
-                if observer is not None:
-                    observer.publish(env, observation, {**info, "frames": frames, "episode": episode,
-                                                        "total_episodes": len(suite), "scenario": scenario["name"],
-                                                        "reward": reward, "terminated": terminated,
-                                                        "truncated": truncated, "action_source": action_source})
+                shown = {**info, "frames": frames, "episode": episode,
+                         "total_episodes": len(suite), "scenario": scenario["name"],
+                         "reward": reward, "terminated": terminated,
+                         "truncated": truncated, "action_source": action_source}
                 if trace_path is not None:
                     with Path(trace_path).open("a") as trace:
                         trace.write(json.dumps({"scenario": scenario["name"], **info}, allow_nan=False) + "\n")
+            if observer is not None and shown is not None:
+                observer.publish(env, observation, shown, attention_enabled=policy_attention)
             metrics = episode_metrics(infos, cfg.dt)
             metrics["stopped_fraction"] = sum(row.get("speed_mps", 0.) < 0.1 for row in infos) / max(1, len(infos))
             metrics["action_override_fraction"] = sum(

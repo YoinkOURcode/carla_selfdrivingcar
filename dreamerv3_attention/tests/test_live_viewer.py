@@ -229,3 +229,88 @@ def test_training_snapshot_publishes_object_and_radar_policy_tokens(tmp_path):
     assert state["policy_objects"][0]["camera"] == "outside frame"
     assert state["radar_readings"][0]["distance_m"] == pytest.approx(5.)
     assert state["radar_readings"][0]["attention"] is None
+
+
+def test_evaluation_attention_matches_the_observation_it_describes(tmp_path):
+    cfg = small_config(split="validation", max_objects=5)
+    encoder = NS(attention=True, last_attention=None)
+    acts = []
+
+    def act(observation, carry, deterministic):
+        # Each decision leaves distinct weights, so any misaligned record is visible.
+        encoder.last_attention = torch.full((1, 1, 2), float(len(acts) + 1))
+        acts.append(len(acts) + 1)
+        return [0., .2], carry
+
+    agent = NS(initial=lambda: None, act=act, encoder=encoder)
+
+    class EvaluationEnv(FakeEnv):
+        def __init__(self, run_cfg, scenario):
+            super().__init__()
+            self.cfg, self.scenario = run_cfg, scenario
+
+        def step(self, action):
+            obs, _, terminated, truncated, info = super().step(action)
+            info.update(route_length_m=6., route_progress_m=self.state.route_progress_m)
+            return obs, 1.5, terminated, truncated, info
+
+        def close(self):
+            pass
+
+    class Recorder:
+        def __init__(self):
+            self.calls = []
+
+        def publish(self, env, observation, record, *, reset=False, attention=None, attention_enabled=None):
+            self.calls.append((reset, record.get("frames"), attention_enabled,
+                               None if attention is None else attention.tolist()))
+
+    recorder, trace = Recorder(), tmp_path / "trace.jsonl"
+
+    def factory(run_cfg, scenario):
+        env = EvaluationEnv(run_cfg, scenario)
+        wrapped = BudgetEnv(env, 20)
+        wrapped.close = env.close
+        return wrapped
+
+    evaluate(cfg, agent, factory, episodes=1, observer=recorder, trace_path=trace)
+
+    rows = [json.loads(line) for line in trace.read_text().splitlines()]
+    # Each trace row keeps the weights of the decision that produced its action.
+    assert [row["attention"] for row in rows] == [[1., 1.], [2., 2.]]
+    # The frame after step 1 is shown with the weights of the next decision, and
+    # the final post-step frame has none.
+    assert recorder.calls == [(True, 0, True, None), (False, 1, True, [2., 2.]), (False, 2, True, None)]
+
+
+def test_evaluation_without_attention_reports_it_disabled(tmp_path):
+    cfg = small_config(split="validation", max_objects=5)
+    calls = []
+
+    class Recorder:
+        def publish(self, env, observation, record, *, reset=False, attention=None, attention_enabled=None):
+            calls.append((attention, attention_enabled))
+
+    agent = NS(initial=lambda: None, act=lambda obs, carry, deterministic: ([0., .2], carry))
+
+    class EvaluationEnv(FakeEnv):
+        def __init__(self, run_cfg, scenario):
+            super().__init__()
+            self.cfg, self.scenario = run_cfg, scenario
+
+        def step(self, action):
+            obs, _, terminated, truncated, info = super().step(action)
+            info.update(route_length_m=6., route_progress_m=self.state.route_progress_m)
+            return obs, 1.5, terminated, truncated, info
+
+        def close(self):
+            pass
+
+    def factory(run_cfg, scenario):
+        env = EvaluationEnv(run_cfg, scenario)
+        wrapped = BudgetEnv(env, 20)
+        wrapped.close = env.close
+        return wrapped
+
+    evaluate(cfg, agent, factory, episodes=1, observer=Recorder())
+    assert calls and all(enabled is False and weights is None for weights, enabled in calls)

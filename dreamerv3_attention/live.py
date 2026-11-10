@@ -40,7 +40,7 @@ class LiveTraining:
         temporary.write_text(json.dumps(self.state, allow_nan=False))
         temporary.replace(self.output / "live.json")
 
-    def publish(self, env, observation, record, *, reset=False):
+    def publish(self, env, observation, record, *, reset=False, attention=None, attention_enabled=None):
         from .viewer import snapshot
 
         env = getattr(env, "env", env)
@@ -62,9 +62,11 @@ class LiveTraining:
         if not reset and not final and now-self.last_publish < .2:
             return
         self.last_publish = now
-        # The actor attended to the preceding observation. Do not overlay those
-        # weights on this post-step image or run extra inference for monitoring.
-        frame = snapshot(env, observation, None, self.distance, record, self.mode)
+        # Callers publish before stepping, so ``attention`` belongs to ``observation``.
+        # The final post-step frame has no weights; ``attention_enabled`` keeps its label correct.
+        frame = snapshot(env, observation, attention, self.distance, record, self.mode)
+        if attention_enabled is not None:
+            frame["attention_enabled"] = attention_enabled
         reward_state = self.rewards.snapshot()
         displayed_record = dict(record)
         if self.last_learner_mode is not None:

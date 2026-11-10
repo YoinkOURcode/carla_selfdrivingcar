@@ -83,13 +83,9 @@ graphify-out
 *.sh
 *.md
 !README.md
+.agents/
+.agentflow/
+.codex/
+.claude/
+world_model_rl/train_from_scratch.sh
 
-!world_model_rl/train_from_scratch.sh
-!world_model_rl/train_collected.sh
-!world_model_rl/recover_from_scratch.sh
-!world_model_rl/generate_config.sh
-!world_model_rl/collect_training_data.sh
-!world_model_rl/fit_world_model.sh
-!world_model_rl/train_sac.sh
-!world_model_rl/train_staged.sh
-!world_model_rl/orchestration/*.md

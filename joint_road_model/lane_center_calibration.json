@@ -1,0 +1,12 @@
+{
+ "k": 1.7406126139532148,
+ "y_h": 357.7353586099945,
+ "image_size": [
+  1280,
+  720
+ ],
+ "frames_used": 742,
+ "frames_with_pair": 767,
+ "median_width_bottom_px": 628.7379907530858,
+ "source": "training-split label masks (aligned_v2)"
+}
