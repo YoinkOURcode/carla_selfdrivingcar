@@ -162,6 +162,37 @@ def test_external_mode_does_not_leak_oracle_hazards():
     assert state.observations_valid
 
 
+def test_camera_only_provider_excludes_oracle_sensors_from_control():
+    prediction = PerceptionPrediction(np.zeros((0, 16), np.float32),
+        driving=safe_external_fields(), frame=42, timestamp=2.1)
+    env, bundle = fake_environment("external", prediction)
+    env.provider.camera_only = True
+    seen = []
+    env.provider.predict = lambda inputs: seen.append(inputs) or prediction
+    bundle.calibration = {"sensors": {"rgb": {"known_camera": True}, "depth": {"privileged": True}}}
+    bundle.depth = np.ones((32, 32), np.float32)
+    bundle.events = ({"oracle_event": True},)
+    for side in ("front", "left", "right", "rear"):
+        bundle.radars[side] = np.array([[3., 0., 1., 0.]], np.float32)
+        bundle.valid[side] = False
+
+    def forbidden_radar(*args):
+        raise AssertionError("Map-filtered radar reached camera-only control")
+
+    env._radar_hazard = forbidden_radar
+    state, obs = env._observe(42)
+    assert state.observations_valid
+    assert not obs["radar_valid"].any()
+    assert not obs["mask"][6:].any()
+    assert env.radar_hazards == {}
+    assert state.front_hazard_m is state.side_hazard_m is state.rear_hazard_m is None
+    assert state.pedestrian_risk == state.child_pedestrian_risk == 0.
+    assert env.oracle_state.child_pedestrian_risk == 1.
+    assert seen[0].depth is None and seen[0].radars == {} and seen[0].events == ()
+    assert seen[0].valid == {"rgb": True}
+    assert seen[0].calibration == {"sensors": {"rgb": {"known_camera": True}}}
+
+
 def test_external_objects_trigger_supervisor_hazard_state():
     objects = np.zeros((1, 16), np.float32)
     objects[0, :2] = [.04, .01]

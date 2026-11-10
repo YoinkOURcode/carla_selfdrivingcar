@@ -80,6 +80,8 @@ class CarlaEnv:
             if cfg.perception != "ground_truth":
                 module, name = cfg.provider.split(":")
                 self.provider = getattr(importlib.import_module(module), name)()
+                if getattr(self.provider, "camera_only", False) and cfg.perception != "external":
+                    raise ValueError("Camera-only perception requires external mode")
         except BaseException:
             self.close()
             raise
@@ -804,8 +806,9 @@ class CarlaEnv:
             transform.location, project_to_road=False, lane_type=self.carla.LaneType.Driving)
         lane_width, in_junction = self.route.lane_geometry(progress, waypoint.lane_width)
         departure_margin = 0.5 if in_junction else 0.0
-        sensors_valid = bundle.valid.get("rgb", False) and all(bundle.valid.get(side, False)
-                                                              for side in ("front", "left", "right", "rear"))
+        camera_only = bool(getattr(self.provider, "camera_only", False))
+        sensors_valid = bundle.valid.get("rgb", False) and (camera_only or all(
+            bundle.valid.get(side, False) for side in ("front", "left", "right", "rear")))
         state = DrivingState(speed_mps=speed, speed_limit_mps=speed_limit if speed_limit > 0 else None,
                              lane_error_m=lateral,
                              heading_error_rad=math.atan2(math.sin(yaw-heading), math.cos(yaw-heading)),
@@ -907,7 +910,12 @@ class CarlaEnv:
         objects = (np.stack([row for _, row in sorted(rows, key=lambda pair: pair[0])]) if rows else
                    np.zeros((0, 16), np.float32))
         if self.provider:
-            prediction = self.provider.predict(bundle)
+            provider_bundle = (replace(bundle, depth=None, radars={}, events=(),
+                                       valid={"rgb": bundle.valid.get("rgb", False)},
+                                       calibration={"sensors": {"rgb": bundle.calibration.get(
+                                           "sensors", {}).get("rgb")}})
+                               if camera_only else bundle)
+            prediction = self.provider.predict(provider_bundle)
             prediction.validate_for(bundle)
             if self.cfg.perception == "external":
                 # Only measured ego speed/navigation goal survive; no actor/map safety oracle.
@@ -966,9 +974,9 @@ class CarlaEnv:
                     state.pedestrian_risk = 1.
                     state.child_pedestrian_risk = max(state.child_pedestrian_risk, float(row[7] > 0.5))
                     state.pedestrian_conflict |= bool(0 < x < max(6., speed*2.) and abs(y) < PEDESTRIAN_CONFLICT_LATERAL_M)
-        # Side/rear/front radar hazards may influence safety in every mode.
+        # Camera-only providers cannot consume radar or map-filtered hazards.
         radars = {}
-        for name, readings in bundle.radars.items():
+        for name, readings in ({} if camera_only else bundle.radars).items():
             readings = readings.copy()
             if len(readings):
                 if self.cfg.sensor_noise_std:
@@ -1016,7 +1024,8 @@ class CarlaEnv:
             navigation.append(token)
         objects = np.concatenate((np.asarray(navigation), objects[:self.cfg.max_objects]), axis=0)
         observation = pack_observation(bundle.rgb, context, objects, radars, max_objects=self.cfg.max_objects+3,
-                                       model_size=(self.cfg.image_size, self.cfg.image_size), radar_valid=bundle.valid)
+                                       model_size=(self.cfg.image_size, self.cfg.image_size),
+                                       radar_valid={} if camera_only else bundle.valid)
         self.last_bundle, self.frame = bundle, frame
         return state, observation
 

@@ -17,8 +17,12 @@ import torch
 import torch.nn.functional as F
 import cv2
 from PIL import Image
-from model import JointRoadModel
-from lane_center import LaneCenterEstimator
+if __package__:
+    from .model import JointRoadModel
+    from .lane_center import LaneCenterEstimator
+else:
+    from model import JointRoadModel
+    from lane_center import LaneCenterEstimator
 from ultralytics.utils.nms import non_max_suppression
 
 class RoadPerception:
