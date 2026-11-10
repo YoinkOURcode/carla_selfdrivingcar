@@ -15,6 +15,22 @@ build/
 /Import/*
 !/Import/README.md
 
+.git-backup/
+
+# Training outputs
+/runs/
+
+# Model checkpoints
+*.pt
+*.pth
+*.ckpt
+
+# Training logs
+*.jsonl
+
+# Missing NVIDIA Cosmos LFS videos
+/PythonAPI/examples/nvidia/cosmos/client/example_data/artifacts/*.mp4
+
 *.VC.db
 *.VC.opendb
 *.a
@@ -62,7 +78,14 @@ Unreal/CarlaUE4/.ignore
 devcontainer.json
 compile_commands.json
 /runs/*/data/
+/runs/orchestrator_wm_20261024_001/
 graphify-out
 *.sh
 *.md
 !README.md
+.agents/
+.agentflow/
+.codex/
+.claude/
+world_model_rl/train_from_scratch.sh
+

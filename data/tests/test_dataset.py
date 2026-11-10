@@ -8,12 +8,13 @@ from pathlib import Path
 import struct
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 from types import SimpleNamespace
 import zlib
 
 
 DATA = Path(__file__).resolve().parents[1]
+BALANCED_PROPORTIONS = [0.1, 0.1, 0.2, 0.2, 0.4]
 spec = importlib.util.spec_from_file_location("generate_dataset", DATA / "generate_dataset.py")
 dataset = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(dataset)
@@ -33,28 +34,36 @@ class DatasetTests(unittest.TestCase):
         self.cfg = dataset.load_config(DATA / "config.json")
 
     def test_exact_workloads_and_balanced_temporal_blocks(self):
-        plan = dataset.make_plan(self.cfg)
+        cfg = dict(self.cfg, proportions=BALANCED_PROPORTIONS)
+        plan = dataset.make_plan(cfg)
         totals = Counter()
-        self.assertEqual(len(plan["episodes"]), 100)
+        self.assertEqual(len(plan["episodes"]), self.cfg["total_images"] // self.cfg["images_per_episode"])
         for ep in plan["episodes"]:
-            owners = dataset.assignments(ep)
-            self.assertEqual(owners, dataset.assignments(ep))
-            self.assertEqual(Counter(owners), {1: 20, 2: 20, 3: 40, 4: 40, 5: 80})
+            owners = dataset.assignments(ep, cfg["proportions"])
+            self.assertEqual(owners, dataset.assignments(ep, cfg["proportions"]))
+            expected_episode = {person: int(ep["images"] * proportion)
+                                for person, proportion in enumerate(BALANCED_PROPORTIONS, 1)}
+            expected_block = {person: int(10 * proportion)
+                              for person, proportion in enumerate(BALANCED_PROPORTIONS, 1)}
+            self.assertEqual(Counter(owners), expected_episode)
             for start in range(0, len(owners), 10):
-                self.assertEqual(Counter(owners[start:start + 10]), {1: 1, 2: 1, 3: 2, 4: 2, 5: 4})
+                self.assertEqual(Counter(owners[start:start + 10]), expected_block)
             totals.update(owners)
-        self.assertEqual(totals, {1: 2000, 2: 2000, 3: 4000, 4: 4000, 5: 8000})
+        expected = {person: int(self.cfg["total_images"] * proportion)
+                    for person, proportion in enumerate(BALANCED_PROPORTIONS, 1)}
+        self.assertEqual(totals, expected)
 
     def test_scenario_coverage_identical_between_people(self):
-        plan = dataset.make_plan(self.cfg)
+        cfg = dict(self.cfg, proportions=BALANCED_PROPORTIONS)
+        plan = dataset.make_plan(cfg)
         pairs = Counter((ep["town"], ep["weather"]) for ep in plan["episodes"])
         self.assertEqual(len(pairs), 50)
-        self.assertEqual(set(pairs.values()), {2})
+        self.assertEqual(set(pairs.values()), {len(plan["episodes"]) // len(pairs)})
         self.assertEqual(set(ep["ego_model"] for ep in plan["episodes"]), set(self.cfg["ego_models"]))
         self.assertEqual(set(ep["focus"] for ep in plan["episodes"]), {"traffic_lights", "speed_limit", "pedestrians"})
         distributions = {p: Counter() for p in range(1, 6)}
         for ep in plan["episodes"]:
-            for person in dataset.assignments(ep):
+            for person in dataset.assignments(ep, cfg["proportions"]):
                 distributions[person][(ep["town"], ep["weather"], ep["ego_model"])] += 1
         for person, distribution in distributions.items():
             normalized = {key: value / sum(distribution.values()) for key, value in distribution.items()}
@@ -71,12 +80,111 @@ class DatasetTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 dataset.load_config(path)
 
+    def test_configured_proportions_assign_every_image_to_person_five(self):
+        cfg = dict(self.cfg, proportions=[0, 0, 0, 0, 1])
+        plan = dataset.make_plan(cfg)
+        for ep in plan["episodes"]:
+            owners = dataset.assignments(ep, cfg["proportions"])
+            self.assertEqual(owners, [5] * ep["images"])
+
+    def test_invalid_proportions_rejected(self):
+        invalid = ([0, 0, 0, 0, 0], [0, 0, 0, 0, 0.5],
+                   [0, 0, 0, 0, -1], [0, 0, 0, 0, float("nan")])
+        for proportions in invalid:
+            with self.subTest(proportions=proportions), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "config.json"
+                path.write_text(json.dumps(dict(self.cfg, proportions=proportions)))
+                with self.assertRaisesRegex(ValueError, "proportions"):
+                    dataset.load_config(path)
+
+    def test_zero_traffic_light_durations_are_allowed(self):
+        cfg = dict(self.cfg, traffic_light_green_seconds=0,
+                   traffic_light_yellow_seconds=0, traffic_light_red_seconds=0)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(json.dumps(cfg))
+            loaded = dataset.load_config(path)
+        self.assertEqual(loaded["traffic_light_green_seconds"], 0)
+        self.assertEqual(loaded["traffic_light_yellow_seconds"], 0)
+        self.assertEqual(loaded["traffic_light_red_seconds"], 0)
+
+    def test_negative_traffic_light_duration_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(json.dumps(dict(self.cfg, traffic_light_green_seconds=-1)))
+            with self.assertRaisesRegex(ValueError, "nonnegative"):
+                dataset.load_config(path)
+
+    def test_single_active_traffic_light_phase_is_held_and_restored(self):
+        """Apply a constant phase to all lights and restore even after failure."""
+        states = SimpleNamespace(Green="Green", Yellow="Yellow", Red="Red")
+        scenarios = ((0, 1000, 0, "Yellow"), (1000, 0, 0, "Green"),
+                     (0, 0, 1000, "Red"), (12, 18, 12, None),
+                     (0, 0, 0, None))
+        for green, yellow, red, expected in scenarios:
+            with self.subTest(durations=(green, yellow, red)):
+                cfg = dict(self.cfg, traffic_light_green_seconds=green,
+                           traffic_light_yellow_seconds=yellow,
+                           traffic_light_red_seconds=red)
+                lights = [Mock(), Mock()]
+                for light, state in zip(lights, ("Green", "Red")):
+                    light.current_state, light.frozen = state, False
+                    light.get_state.side_effect = lambda light=light: light.current_state
+                    light.is_frozen.side_effect = lambda light=light: light.frozen
+                    light.get_green_time.return_value = 12
+                    light.get_yellow_time.return_value = 18
+                    light.get_red_time.return_value = 12
+                    light.set_state.side_effect = lambda state, light=light: setattr(light, "current_state", state)
+
+                    def freeze_all(frozen):
+                        # CARLA freezing can affect other lights in the group.
+                        for member in lights:
+                            member.frozen = frozen
+
+                    light.freeze.side_effect = freeze_all
+                world, client = Mock(), Mock()
+                client.load_world.return_value = world
+                world.get_actors.return_value = MagicMock()
+                world.get_actors.return_value.filter.side_effect = (
+                    lambda pattern: lights if pattern == "traffic.traffic_light*" else [Mock()])
+                args = SimpleNamespace(load_timeout=300, timeout=60, tm_port=8000)
+                ep = dataset.make_plan(cfg)["episodes"][0]
+
+                def check_configured_lights(*unused):
+                    """Check the scene before spawning, then exercise cleanup."""
+                    for light in lights:
+                        light.set_green_time.assert_called_with(green)
+                        light.set_yellow_time.assert_called_with(yellow)
+                        light.set_red_time.assert_called_with(red)
+                        if expected is None:
+                            light.set_state.assert_not_called()
+                            light.freeze.assert_not_called()
+                        else:
+                            self.assertEqual(light.current_state, expected)
+                            self.assertTrue(light.frozen)
+                    raise RuntimeError("stop after configuring lights")
+
+                with tempfile.TemporaryDirectory() as directory, \
+                        patch.object(dataset, "pedestrian_pools", return_value=([], [])), \
+                        patch.object(dataset, "weather_value"), \
+                        patch.object(dataset, "ranked_spawns", side_effect=check_configured_lights), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    with self.assertRaisesRegex(RuntimeError, "stop after configuring lights"):
+                        dataset.capture_episode(SimpleNamespace(TrafficLightState=states),
+                                                client, args, Path(directory), cfg, ep)
+                for light, original in zip(lights, ("Green", "Red")):
+                    self.assertEqual(light.current_state, original)
+                    self.assertFalse(light.frozen)
+                    light.set_green_time.assert_called_with(12)
+                    light.set_yellow_time.assert_called_with(18)
+                    light.set_red_time.assert_called_with(12)
+
     def test_verify_complete_missing_wrong_size_and_extra_images(self):
         cfg = dict(self.cfg, total_images=10, images_per_episode=10,
                    towns=["Town01"], weather_presets=["ClearNoon"], width=2, height=2)
         plan = dataset.make_plan(cfg)
         ep = plan["episodes"][0]
-        people = dataset.assignments(ep)
+        people = dataset.assignments(ep, cfg["proportions"])
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)
             for i in range(ep["images"]):
@@ -86,7 +194,9 @@ class DatasetTests(unittest.TestCase):
             for person in range(1, 6):
                 paths = [str(dataset.image_path(output, ep, i, people).relative_to(output))
                          for i, owner in enumerate(people) if owner == person]
-                (output / f"person_{person}" / "images.txt").write_text("\n".join(paths) + "\n")
+                folder = output / f"person_{person}"
+                folder.mkdir(parents=True, exist_ok=True)
+                (folder / "images.txt").write_text("\n".join(paths) + ("\n" if paths else ""))
             dataset.write_json(output / "episodes" / (ep["id"] + ".json"), ep)
             with contextlib.redirect_stdout(io.StringIO()):
                 dataset.verify(output, plan)
@@ -97,6 +207,7 @@ class DatasetTests(unittest.TestCase):
             self.assertFalse(dataset.valid_png(path, cfg))
             path.unlink()
             extra = output / "person_1" / ep["id"] / "extra.png"
+            extra.parent.mkdir(parents=True, exist_ok=True)
             extra.write_bytes(png(2, 2))
             with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(RuntimeError):
                 dataset.verify(output, plan)
@@ -168,15 +279,15 @@ class DatasetTests(unittest.TestCase):
             for person in range(1, 6):
                 paths = []
                 for ep in plan["episodes"]:
-                    owners = dataset.assignments(ep)
+                    owners = dataset.assignments(ep, plan["config"]["proportions"])
                     for i, owner in enumerate(owners):
                         if owner == person:
                             paths.append(str(dataset.image_path(output, ep, i, owners).relative_to(output)))
                 folder = output / f"person_{person}"
                 folder.mkdir()
-                (folder / "images.txt").write_text("\n".join(paths) + "\n")
+                (folder / "images.txt").write_text("\n".join(paths) + ("\n" if paths else ""))
             ep = plan["episodes"][0]
-            owners = dataset.assignments(ep)
+            owners = dataset.assignments(ep, plan["config"]["proportions"])
             for i in range(10):
                 path = dataset.image_path(output, ep, i, owners)
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -193,7 +304,11 @@ class DatasetTests(unittest.TestCase):
                 dataset.export_completed(output, plan, archive)
             with dataset.zipfile.ZipFile(archive) as bundle:
                 self.assertEqual(sum(name.endswith(".png") for name in bundle.namelist()), 10)
-                self.assertEqual(len(bundle.read("person_5/images.txt").decode().splitlines()), 4)
+                expected_person_five = sum(
+                    owner == 5 for owner in dataset.assignments(
+                        plan["episodes"][0], plan["config"]["proportions"]))
+                self.assertEqual(len(bundle.read("person_5/images.txt").decode().splitlines()),
+                                 expected_person_five)
             with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(RuntimeError):
                 dataset.verify(output, plan)
 

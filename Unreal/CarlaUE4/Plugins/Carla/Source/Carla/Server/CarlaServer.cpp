@@ -3330,7 +3330,8 @@ BIND_SYNC(send) << [this](
       UEStartLocation = LargeMap->GlobalToLocalLocation(UEStartLocation);
       UEEndLocation = LargeMap->GlobalToLocalLocation(UEEndLocation);
     }
-    return URayTracer::CastRay(StartLocation, EndLocation, World);
+    // The trace operates in local Unreal coordinates, including world rebases.
+    return URayTracer::CastRay(UEStartLocation, UEEndLocation, World);
   };
 
 }

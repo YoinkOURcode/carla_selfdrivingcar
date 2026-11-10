@@ -2,6 +2,7 @@
 
 import errno
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -16,9 +17,15 @@ PORT_FLAGS = {
 
 
 def launch_command(editor, project, arguments):
-    """Normalize port overrides so the checked ports equal Unreal's arguments."""
+    """Normalize town and port overrides before launching Unreal."""
     selected, remaining = {}, []
+    town = "Town01"
     for argument in arguments:
+        if argument.startswith("--town="):
+            town = argument.partition("=")[2]
+            if not re.fullmatch(r"Town[A-Za-z0-9_]+", town):
+                raise ValueError("Use --town=TownName, for example --town=Town02")
+            continue
         flag, separator, value = argument.partition("=")
         kind = PORT_FLAGS.get(flag.lower())
         if kind is None:
@@ -37,7 +44,7 @@ def launch_command(editor, project, arguments):
         raise ValueError("CARLA ports must be between 1 and 65535 (default companion ports are RPC+1 and RPC+2)")
     if len(set(ports.values())) != 3:
         raise ValueError("RPC, streaming and secondary ports must differ")
-    command = [str(editor), str(project), "/Game/Carla/Maps/Town01", "-game", "-vulkan",
+    command = [str(editor), str(project), f"/Game/Carla/Maps/{town}", "-game", "-vulkan",
                "-RenderOffScreen", f"-carla-rpc-port={ports['rpc']}",
                f"-carla-streaming-port={ports['streaming']}",
                f"-carla-secondary-port={ports['secondary']}", "-quality-level=Epic",

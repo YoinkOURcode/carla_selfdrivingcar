@@ -1,0 +1,7 @@
+{
+  "attention": false,
+  "device": "cuda",
+  "seed": 7,
+  "steps": 10000,
+  "split": "train"
+}

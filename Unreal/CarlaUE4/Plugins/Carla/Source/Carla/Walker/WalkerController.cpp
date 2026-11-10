@@ -9,6 +9,7 @@
 #include "Carla/Walker/WalkerAnim.h"
 
 #include "Components/PoseableMeshComponent.h"
+#include "Components/BoxComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Containers/Map.h"
 #include "GameFramework/Character.h"
@@ -42,6 +43,23 @@ void AWalkerController::OnPossess(APawn *InPawn)
   MovementComponent->MaxWalkSpeed = GetMaximumWalkSpeed();
   MovementComponent->JumpZVelocity = 500.0f;
   Character->JumpMaxCount = 2;
+
+  // Walker blueprints include non-body interaction boxes such as CarStopper.
+  // Their default response to the overlap ray channel can hide the walker
+  // before its body is reached. Keep interaction/physics channels untouched.
+  TArray<UPrimitiveComponent *> Components;
+  Character->GetComponents<UPrimitiveComponent>(Components);
+  for (auto *Component : Components)
+  {
+    const FName Profile = Component->GetCollisionProfileName();
+    if (Component->IsA<UBoxComponent>() &&
+        Component->GetCollisionEnabled() == ECollisionEnabled::QueryOnly &&
+        Component->GetCollisionResponseToChannel(ECC_Visibility) != ECR_Block &&
+        (Profile == FName(TEXT("Trigger")) || Profile == FName(TEXT("OverlapAllDynamic"))))
+    {
+      Component->SetCollisionResponseToChannel(ECC_GameTraceChannel3, ECR_Ignore);
+    }
+  }
 }
 
 void AWalkerController::ApplyWalkerControl(const FWalkerControl &InControl)

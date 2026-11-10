@@ -30,13 +30,18 @@ def write_json(path, value):
 
 def load_config(path):
     cfg = json.loads(path.read_text())
-    if len(cfg["proportions"]) != 5 or cfg["proportions"] != [0.1, 0.1, 0.2, 0.2, 0.4]:
-        raise ValueError("This assignment requires proportions [0.1, 0.1, 0.2, 0.2, 0.4]")
+
     for key in ("total_images", "images_per_episode", "width", "height"):
         if not isinstance(cfg[key], int) or cfg[key] <= 0:
             raise ValueError(f"{key} must be a positive integer")
     if cfg["images_per_episode"] % 10 or cfg["total_images"] % cfg["images_per_episode"]:
         raise ValueError("Episode size must be divisible by 10 and divide total_images")
+    proportions = cfg["proportions"]
+    if (not isinstance(proportions, list) or len(proportions) != 5
+            or any(isinstance(value, bool) or not isinstance(value, (int, float))
+                   or not math.isfinite(value) or value < 0 for value in proportions)
+            or not math.isclose(sum(proportions), 1.0, rel_tol=0.0, abs_tol=1e-9)):
+        raise ValueError("proportions must contain five nonnegative values that sum to 1")
     for key in ("towns", "weather_presets", "ego_models", "vehicle_counts", "pedestrian_counts"):
         if not cfg[key] or len(set(cfg[key])) != len(cfg[key]):
             raise ValueError(f"{key} must be a nonempty list without duplicates")
@@ -55,8 +60,8 @@ def load_config(path):
         if cfg[key] <= 0:
             raise ValueError(f"{key} must be positive")
     for key in ("traffic_light_green_seconds", "traffic_light_yellow_seconds", "traffic_light_red_seconds"):
-        if cfg[key] <= 0:
-            raise ValueError(f"{key} must be positive")
+        if cfg[key] < 0:
+            raise ValueError(f"{key} must be nonnegative")
     if cfg["warmup_seconds"] < 0 or min(cfg["vehicle_counts"]) < 1 or min(cfg["pedestrian_counts"]) < 2:
         raise ValueError("Invalid warmup or actor counts")
     return cfg
@@ -84,18 +89,29 @@ def make_plan(cfg):
     return {"schema": 1, "config": cfg, "episodes": episodes}
 
 
-def assignments(ep):
+def assignments(ep, proportions):
+    """Assign each image according to five normalized person proportions."""
     rng = random.Random(ep["seed"] ^ 0x5A17)
+    exact_counts = [value * 10 for value in proportions]
+    counts = [math.floor(value) for value in exact_counts]
+    remaining = 10 - sum(counts)
+    order = sorted(range(5), key=lambda person: exact_counts[person] - counts[person], reverse=True)
+    for person in order[:remaining]:
+        counts[person] += 1
+    block = [person + 1 for person, count in enumerate(counts) for _ in range(count)]
     result = []
     for _ in range(ep["images"] // 10):
-        block = [1, 2, 3, 3, 4, 4, 5, 5, 5, 5]
-        rng.shuffle(block)
-        result.extend(block)
+        shuffled_block = block.copy()
+        rng.shuffle(shuffled_block)
+        result.extend(shuffled_block)
     return result
 
 
-def image_path(output, ep, index, people=None):
-    people = people if people is not None else assignments(ep)
+def image_path(output, ep, index, people=None, proportions=None):
+    if people is None:
+        if proportions is None:
+            raise ValueError("Provide assigned people or configured proportions")
+        people = assignments(ep, proportions)
     return output / f"person_{people[index]}" / ep["id"] / f"{index:06d}.png"
 
 
@@ -152,7 +168,7 @@ def verify(output, plan, completed_only=False, full_png=False):
     missing = []
     expected = set()
     for ep in episodes:
-        people = assignments(ep)
+        people = assignments(ep, plan["config"]["proportions"])
         for i, person in enumerate(people):
             path = image_path(output, ep, i, people)
             expected.add(path)
@@ -176,7 +192,8 @@ def verify(output, plan, completed_only=False, full_png=False):
     bad_manifests = []
     for person in range(1, 6):
         intended = [str(image_path(output, ep, i, people).relative_to(output))
-                    for ep in plan["episodes"] for people in [assignments(ep)]
+                    for ep in plan["episodes"]
+                    for people in [assignments(ep, plan["config"]["proportions"])]
                     for i, owner in enumerate(people) if owner == person]
         try:
             actual = (output / f"person_{person}" / "images.txt").read_text().splitlines()
@@ -214,7 +231,7 @@ def export_completed(output, plan, archive):
         manifests = {person: [] for person in range(1, 6)}
         for ep in episodes:
             bundle.write(output / "episodes" / (ep["id"] + ".json"), "episodes/" + ep["id"] + ".json")
-            owners = assignments(ep)
+            owners = assignments(ep, plan["config"]["proportions"])
             for i, person in enumerate(owners):
                 path = image_path(output, ep, i, owners)
                 relative = str(path.relative_to(output))
@@ -222,10 +239,7 @@ def export_completed(output, plan, archive):
                 manifests[person].append(relative)
         for person, paths in manifests.items():
             bundle.writestr(f"person_{person}/images.txt", "\n".join(paths) + "\n")
-        bundle.writestr("README.txt", "Unlabeled CARLA RGB images from completed collection episodes.\n"
-                        "images.txt paths are relative to the archive root and include only exported images.\n"
-                        "full_collection_plan.json describes the larger planned collection; only episodes\n"
-                        "listed in verification_completed.json are included here. No object annotations.\n")
+
     temporary.replace(archive)
     print(f"Exported {sum(ep['images'] for ep in episodes)} images to {archive}")
 
@@ -342,10 +356,14 @@ def capture_episode(carla, client, args, output, cfg, ep):
     tm = client.get_trafficmanager(args.tm_port)
     actors, controllers = [], []
     camera = None
-    people = assignments(ep)
+    people = assignments(ep, cfg["proportions"])
     existing = [valid_png(image_path(output, ep, i, people), cfg) for i in range(ep["images"])]
     # A partial episode is replayed from its seed; saved indices are retained.
     lights = []
+    # One nonzero phase means a constant color, not a timed junction cycle.
+    active_phases = [name for name in ("Green", "Yellow", "Red")
+                     if cfg[f"traffic_light_{name.lower()}_seconds"] > 0]
+    forced_state = getattr(carla.TrafficLightState, active_phases[0]) if len(active_phases) == 1 else None
     try:
         settings = world.get_settings()
         settings.synchronous_mode = True
@@ -363,11 +381,17 @@ def capture_episode(carla, client, args, output, cfg, ep):
         world.set_weather(weather_value(carla, ep["weather"]))
         library = world.get_blueprint_library()
         children, adults = pedestrian_pools(library)
-        for light in world.get_actors().filter("traffic.traffic_light*"):
-            lights.append((light, light.get_green_time(), light.get_yellow_time(), light.get_red_time()))
+        # Snapshot every light before freezing, which can affect other lights.
+        lights = [(light, light.get_green_time(), light.get_yellow_time(),
+                   light.get_red_time(), light.get_state(), light.is_frozen())
+                  for light in world.get_actors().filter("traffic.traffic_light*")]
+        for light, *_ in lights:
             light.set_green_time(cfg["traffic_light_green_seconds"])
             light.set_yellow_time(cfg["traffic_light_yellow_seconds"])
             light.set_red_time(cfg["traffic_light_red_seconds"])
+            if forced_state is not None:
+                light.freeze(True)
+                light.set_state(forced_state)
         if not lights or not list(world.get_actors().filter("traffic.speed_limit.*")):
             raise RuntimeError(f"{ep['town']} needs traffic lights and speed-limit signs; choose an urban map")
         spawns = ranked_spawns(world, ep, rng)
@@ -555,11 +579,14 @@ def capture_episode(carla, client, args, output, cfg, ep):
                 client.apply_batch_sync(commands, False)
         except RuntimeError as exc:
             print(f"Actor cleanup warning: {exc}", file=sys.stderr)
-        for light, green, yellow, red in lights:
+        for light, green, yellow, red, state, frozen in lights:
             try:
                 light.set_green_time(green)
                 light.set_yellow_time(yellow)
                 light.set_red_time(red)
+                if forced_state is not None:
+                    light.set_state(state)
+                    light.freeze(frozen)
             except RuntimeError:
                 pass
         # Attempt each restoration even if the connection drops during an earlier cleanup.
@@ -587,7 +614,7 @@ def collect(args, output, plan):
         weather_value(carla, weather)
     completed = 0
     for ep in plan["episodes"]:
-        people = assignments(ep)
+        people = assignments(ep, cfg["proportions"])
         marker = output / "episodes" / (ep["id"] + ".json")
         try:
             record = json.loads(marker.read_text())
@@ -643,7 +670,7 @@ def main():
         # Assignment manifests contain paths only. No labels, actor states or bounding boxes.
         manifests = {person: [] for person in range(1, 6)}
         for ep in plan["episodes"]:
-            people = assignments(ep)
+            people = assignments(ep, cfg["proportions"])
             for i, person in enumerate(people):
                 manifests[person].append(str(image_path(output, ep, i, people).relative_to(output)))
         for person, paths in manifests.items():

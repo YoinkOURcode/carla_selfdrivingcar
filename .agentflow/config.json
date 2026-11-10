@@ -1,0 +1,15 @@
+{
+  "tests": [
+    [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "world_model_rl/tests"
+    ]
+  ],
+  "timeout_seconds": 900,
+  "test_timeout_seconds": 300,
+  "autonomous": false,
+  "git_lfs_skip_smudge": true
+}
