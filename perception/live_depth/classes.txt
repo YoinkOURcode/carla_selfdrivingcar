@@ -1,0 +1,7 @@
+0:other_vehicle
+1:red_light
+2:yellow_light
+3:green_light
+4:adult_pedestrian
+5:child_pedestrian
+6:speed_limit
