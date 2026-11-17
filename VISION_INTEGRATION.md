@@ -18,6 +18,18 @@ driving model is trained and checkpoint files are unchanged.
 - `joint_road_model/road_perception.py`: package-relative imports, while
   preserving its standalone command-line interface. Model inference is
   otherwise unchanged.
+- Depth camera and speed-limit OCR (branch `vision-lane-stall-fix`):
+  `VisionPerceptionProvider.uses_depth_camera` lets `environment.py` pass the
+  depth image and calibration from the depth camera mounted with the RGB camera,
+  a stand-in for a real depth sensor. Radar, events and other calibration stay
+  excluded. `vision.py` uses that depth for object positions, red/yellow
+  stop-line distances and choosing which sign to read; `speed_sign.py` reads and
+  votes on sign numbers. `reset()` clears the lane hold and the speed limit
+  each episode.
+- Lane acceptance (same branch): `VISION_MAX_EXTRAPOLATION` (default 0.7)
+  replaces the fixed 0.5 low-confidence limit, and `VISION_LANE_HOLD_S`
+  (default 2.0, 0 disables) holds the last valid lane estimate through dash
+  gaps.
 - `dreamerv3_attention/requirements-vision.txt`: inference dependencies pinned
   to work with this project's existing torch 2.7.1 and NumPy 1.26.4.
 - `dreamerv3_attention/tests/test_vision.py` and `tests/test_environment.py`:
@@ -34,6 +46,28 @@ termination and rewards. They do not supply the vision provider or its safety
 state. Ego speed/pose and planned route tokens remain as odometry/GPS/navigation
 equivalents, as agreed. This is not camera-only localization.
 
+## Known issues (depth/OCR, 2026-11-17, not yet fixed)
+
+A live check on Town02 (Traffic Manager driving the eval route with traffic,
+first 129 m only) found:
+
+- **Red-light distance is wrong near junctions.** While the true red stop line
+  was 40 m ahead, vision reported a red light at 0 m on all 175 frames where it
+  gave a distance. The likely cause is a light the car has already passed:
+  anything closer than the stop-line offset is clamped to 0 m, which means stop
+  here. Suggested fix: ignore a light whose stop line is behind the car
+  (forward position minus offset minus bumper well below 0), then recheck
+  against ground truth.
+- **Speed-limit OCR is not verified in simulation.** No sign was read on that
+  stretch. The map limit there is 30 km/h throughout. The unit tests cover only
+  the voting and passing logic.
+- **Object positions from depth look good.** The median forward error against
+  the true vehicle positions was 0.42 m over 1,215 frames.
+- **Things this change does not fix:** visibility is still fixed at 30 m, which
+  caps the target speed at about 1.1 m/s; junctions without lane paint still
+  stall the car at about 74 m; launch CARLA without `-quality-level=Low`
+  (it crashes at about 98 m).
+
 ## Observation limitations
 
 **These models are insufficient to replace the full original observation.**
@@ -41,10 +75,10 @@ equivalents, as agreed. This is not camera-only localization.
 | Original information | Vision behavior and remaining gap |
 | --- | --- |
 | Lane position and heading | Project predicted lane-centre pixels onto a flat road and fit a metric line. Missing or low-confidence lanes invalidate the observation and trigger full braking; there is no map fallback. Curves, hills and intersections remain difficult. |
-| Object positions | Project the bottom centre of vehicle/pedestrian boxes onto a flat road. These are approximate positions, not measured depth. Truncated boxes or feet outside the supported projection invalidate observations. |
+| Object positions | Bottom centre of each vehicle/pedestrian box placed at the median CARLA depth of the box (`associate_depth`), with measured depth and its spread in the depth/uncertainty channels. Without depth: flat-road projection as before, and truncated boxes or feet outside the projection invalidate the observation. |
 | Object velocity | Unavailable; velocity channels are zero placeholders. No tracker or motion model is introduced. |
-| Speed-limit value | Detector only recognizes the sign class, not its number. Value stays unknown (`None`, confidence 0); existing default-speed behavior applies. |
-| Traffic lights | Any detected red takes priority over yellow/green. Stop-line distance and route/lane association are unknown. Existing safety logic stops on an identified red/yellow with unknown range, including potentially irrelevant lights. No green-light restart is inferred. Missed lights can still cause violations. |
+| Speed-limit value | The nearest sign on our side is read with RapidOCR (`speed_sign.py`, taken from `perception/live_depth`), at most every 0.1 s. A value needs 3 readings and twice any other value, and applies once the sign leaves view within 15 m (passed). Confidence is the vote share. Before the first sign, or without `rapidocr_onnxruntime`, the value stays unknown and the default speed applies. |
+| Traffic lights | Red takes priority over yellow. With depth, the lamp head's position gives the stop-line distance: forward position minus 7.1 m (lamp to stop line, the median of all 24 Town02 stop points, range 6.9 to 7.4 m) minus the 2.5 m bumper allowance. Lights with depth more than 1 m left or 6 m right of the car belong to other lanes and are ignored. A light without depth keeps an unknown range and the old full-stop behavior. The offset and side window are Town02 values (`VISION_LIGHT_STOP_OFFSET_M`, `VISION_LIGHT_MIN_LATERAL_M`, `VISION_LIGHT_MAX_LATERAL_M`). Restart on green is not inferred: the light just stops being red. Missed lights can still cause violations. |
 | Crossings | Bounding-box ground projection provides approximate distance, with a conservative fixed 2.5 m bumper allowance. Pedestrian proximity estimates occupancy. A single visible-crossing identifier is used; reliable multi-crossing tracking is unavailable. |
 | Side/rear hazards | Front camera only; no complete side/rear coverage and no radar fallback. |
 | Weather and visibility | Models have no weather estimator. Rain/wetness/night retain neutral placeholders; visibility uses a fixed conservative 30 m assumption, not simulator weather. |
@@ -58,7 +92,7 @@ original camera geometry; it is not recalibrated or retrained here.
 
 Object tokens retain their shape: estimated xyz/100, zero velocity, pedestrian
 and child labels, position-valid flag, estimated range/100 and detector
-confidence. Measured-depth/uncertainty channels remain unavailable. The existing
+confidence. Measured depth and uncertainty come from the depth camera when it is available. The existing
 driving policy was trained with different observation semantics, so checkpoint
 compatibility does not imply good driving performance.
 

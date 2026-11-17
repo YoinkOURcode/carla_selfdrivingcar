@@ -910,10 +910,15 @@ class CarlaEnv:
         objects = (np.stack([row for _, row in sorted(rows, key=lambda pair: pair[0])]) if rows else
                    np.zeros((0, 16), np.float32))
         if self.provider:
-            provider_bundle = (replace(bundle, depth=None, radars={}, events=(),
-                                       valid={"rgb": bundle.valid.get("rgb", False)},
-                                       calibration={"sensors": {"rgb": bundle.calibration.get(
-                                           "sensors", {}).get("rgb")}})
+            # Camera-only providers see the RGB camera, plus the depth camera mounted with
+            # it when they declare uses_depth_camera (stand-in for a real depth sensor).
+            uses_depth = camera_only and bool(getattr(self.provider, "uses_depth_camera", False))
+            camera_sensors = ("rgb", "depth") if uses_depth else ("rgb",)
+            provider_bundle = (replace(bundle, depth=bundle.depth if uses_depth else None,
+                                       radars={}, events=(),
+                                       valid={name: bundle.valid.get(name, False) for name in camera_sensors},
+                                       calibration={"sensors": {name: bundle.calibration.get(
+                                           "sensors", {}).get(name) for name in camera_sensors}})
                                if camera_only else bundle)
             prediction = self.provider.predict(provider_bundle)
             prediction.validate_for(bundle)
