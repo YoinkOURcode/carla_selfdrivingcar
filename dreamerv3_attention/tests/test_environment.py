@@ -193,6 +193,24 @@ def test_camera_only_provider_excludes_oracle_sensors_from_control():
     assert seen[0].calibration == {"sensors": {"rgb": {"known_camera": True}}}
 
 
+def test_depth_using_camera_provider_gets_aligned_depth_only():
+    prediction = PerceptionPrediction(np.zeros((0, 16), np.float32),
+        driving=safe_external_fields(), frame=42, timestamp=2.1)
+    env, bundle = fake_environment("external", prediction)
+    env.provider.camera_only = env.provider.uses_depth_camera = True
+    seen = []
+    env.provider.predict = lambda inputs: seen.append(inputs) or prediction
+    bundle.calibration = {"sensors": {"rgb": {"known_camera": True}, "depth": {"same_mount": True},
+                                      "front": {"radar": True}}}
+    bundle.depth = np.ones((32, 32), np.float32)
+    bundle.valid["depth"] = True
+    bundle.events = ({"oracle_event": True},)
+    env._observe(42)
+    assert seen[0].depth is bundle.depth and seen[0].radars == {} and seen[0].events == ()
+    assert seen[0].valid == {"rgb": True, "depth": True}
+    assert seen[0].calibration == {"sensors": {"rgb": {"known_camera": True}, "depth": {"same_mount": True}}}
+
+
 def test_external_objects_trigger_supervisor_hazard_state():
     objects = np.zeros((1, 16), np.float32)
     objects[0, :2] = [.04, .01]
