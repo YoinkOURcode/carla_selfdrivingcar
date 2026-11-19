@@ -72,7 +72,8 @@ def sign_cores(crop):
 
 
 def parse_limit(text):
-    digits = "".join(ch for ch in text.upper().replace("O", "0").replace("D", "0") if ch.isdigit())
+    # ASCII only: OCR can emit glyphs like "③" that isdigit() accepts but int() rejects.
+    digits = "".join(ch for ch in text.upper().replace("O", "0").replace("D", "0") if ch in "0123456789")
     if not digits:
         return None
     value = int(digits)

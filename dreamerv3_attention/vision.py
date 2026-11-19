@@ -1,10 +1,13 @@
 """Frozen RGB models, the aligned depth camera and OCR for external observations.
 
-No simulator actors, maps or weather are consulted. Object and traffic-light
-distances come from the CARLA depth camera mounted with the RGB camera (a
-stand-in for a real depth sensor). When depth is missing, objects fall back to
-flat-road projection (ego z=0, supplied camera calibration) and lights keep an
-unknown distance. Speed-limit numbers are read from sign crops with OCR.
+No simulator actors, signal states or weather are consulted. The camera decides
+light colour; the stop position comes from navigation: signalised stop lines on
+the planned route (map geometry, as a satnav knows junctions) plus static vehicle
+geometry. A red/yellow with no route stop on the planned path is not for this
+route. Without route data the range is unknown. Near and inside route junctions,
+where ego-lane paint is absent, lane error and heading come from the planned
+path. The path also supports low-speed recovery after a lane estimate expires.
+Speed numbers use OCR.
 """
 
 import math
@@ -14,9 +17,34 @@ from pathlib import Path
 import numpy as np
 
 from .sensors import PerceptionPrediction, associate_depth
+from .stop_lines import project_to_path
+from .traffic_signals import SignalTracker
 from .speed_sign import SIGN_MIN_HEIGHT_PX, SpeedLimitTracker, make_sign_reader, read_speed_limit
 
 BUMPER_ALLOWANCE_M = 2.5  # same fixed ego-origin-to-bumper allowance as crossings
+# Wide enough to recover a car that drifted while vision was lost (experiment_28
+# eval2 deadlocks: 1.3-1.8 m, 31 deg), narrow enough to reject a mis-projected route.
+ROUTE_LANE_FALLBACK_MAX_OFFSET_M = 2.0
+ROUTE_LANE_FALLBACK_MAX_HEADING_RAD = math.radians(40.)
+
+
+def path_lane(path):
+    """(lane_error_m, heading_error_rad) of the ego relative to a planned ego-frame path.
+
+    Same signs as the vision fit: lane error is the ego's lateral offset from
+    the centre line, heading error is minus the line's angle. None if unusable.
+    """
+    projection = project_to_path((0., 0.), path) if path is not None else None
+    if projection is None:
+        return None
+    station, lateral = projection
+    path = np.asarray(path, dtype=float)
+    delta = np.diff(path, axis=0)
+    lengths = np.linalg.norm(delta, axis=1)
+    starts = np.r_[0., np.cumsum(lengths)[:-1]]
+    usable = np.flatnonzero(lengths > 1e-8)
+    index = usable[max(0, int(np.searchsorted(starts[usable], station, "right")) - 1)]
+    return float(lateral), float(-math.atan2(delta[index, 1], delta[index, 0]))
 
 
 def _env_float(name, default, low, high):
@@ -29,8 +57,6 @@ def _env_float(name, default, low, high):
 class VisionPerceptionProvider:
     camera_only = True
     uses_depth_camera = True
-    # Defaults, overridable through the environment variables read in __init__.
-    light_stop_offset_m, light_min_lateral_m, light_max_lateral_m = 7.1, -1.0, 6.0
     sign_reader = speed_limits = None
 
     def __init__(self):
@@ -56,11 +82,7 @@ class VisionPerceptionProvider:
         if not (0. < self.max_extrapolation <= 1. and 0. <= self.lane_hold_s <= 10.):
             raise ValueError("VISION_MAX_EXTRAPOLATION must be in (0, 1] and VISION_LANE_HOLD_S in [0, 10]")
         self._last_lane = None
-        # Lamp head to stop line along the lane: 7.1 m median over all 24 Town02 stop points
-        # (range 6.9 to 7.4), heads 2.3 to 2.7 m right of the lane centre.
-        self.light_stop_offset_m = _env_float("VISION_LIGHT_STOP_OFFSET_M", "7.1", 0., 30.)
-        self.light_min_lateral_m = _env_float("VISION_LIGHT_MIN_LATERAL_M", "-1.0", -20., 20.)
-        self.light_max_lateral_m = _env_float("VISION_LIGHT_MAX_LATERAL_M", "6.0", -20., 20.)
+        self.signal_tracker = SignalTracker(_env_float("VISION_SIGNAL_HOLD_S", "2.0", 0., 10.))
         self.sign_reader = make_sign_reader()
         self.speed_limits = SpeedLimitTracker()
         if self.sign_reader is None:
@@ -68,6 +90,8 @@ class VisionPerceptionProvider:
 
     def reset(self):
         self._last_lane = None
+        if getattr(self, "signal_tracker", None) is not None:
+            self.signal_tracker.reset()
         if getattr(self, "speed_limits", None) is not None:
             self.speed_limits.reset()
 
@@ -99,41 +123,64 @@ class VisionPerceptionProvider:
         return location + depth_m * np.array([1., (u-intrinsics["cx"])/intrinsics["fx"],
                                               -(v-intrinsics["cy"])/intrinsics["fy"]])
 
-    def _signal(self, found, calibration):
-        """(applies, stop-line distance or None) for the detected lights of one colour.
+    def _signals(self, bundle, bgr, road, points, lights, calibration, depth_image):
+        path = bundle.ego_path
+        center = road.get("lane_center") or {}
+        if path is None and len(points) >= 2:
+            points = points[np.argsort(points[:, 0])]
+            slope, intercept = np.polyfit(points[:, 0], points[:, 1], 1)
+            path = np.vstack(([0., intercept], points[:, :2]))
+        lane_width = 3.5  # same nominal width used when only one lane edge is visible
+        if depth_image is not None and center.get('left') and center.get('right'):
+            v = int(.75*bgr.shape[0])
+            edge_points = []
+            for edge in (center['left'], center['right']):
+                u = int(round(edge['a']*v+edge['b']))
+                patch = depth_image[max(0,v-2):v+3, max(0,u-2):u+3] if 0 <= u < bgr.shape[1] else []
+                values = np.asarray(patch)
+                values = values[np.isfinite(values) & (values > 0.) & (values < 999.)]
+                if len(values):
+                    edge_points.append(self.depth_point(u, v, float(np.median(values)), calibration))
+            if len(edge_points) == 2:
+                width = float(np.linalg.norm(edge_points[1][:2]-edge_points[0][:2]))
+                if 1.5 <= width <= 8.:
+                    lane_width = width
+        return self._track(bundle, lights, path, lane_width)
 
-        A light with measured depth outside our side of the road belongs to another
-        lane and is ignored. A light without depth still applies, at unknown range.
-        """
-        applies, best = False, None
-        for (x1, y1, x2, y2), depth, has_depth in found:
-            point = (self.depth_point((x1+x2)/2., (y1+y2)/2., float(depth), calibration)
-                     if has_depth else None)
-            if point is None:
-                applies = True
-                continue
-            if not self.light_min_lateral_m <= point[1] <= self.light_max_lateral_m:
-                continue
-            applies = True
-            distance = max(0., float(point[0]) - self.light_stop_offset_m - BUMPER_ALLOWANCE_M)
-            best = distance if best is None else min(best, distance)
-        # Any applicable light without range keeps the conservative unknown distance.
-        if any(not has_depth for _, _, has_depth in found):
-            best = None
-        return applies, best
+    def _track(self, bundle, lights, path, lane_width=3.5):
+        if getattr(self, 'signal_tracker', None) is None:
+            self.signal_tracker = SignalTracker()
+        route = bundle.route_stop_lines
+        lines = [dict(points_ego=np.asarray(line, float), confidence=1.) for line in route or ()]
+        fields, signals = self.signal_tracker.update(float(bundle.timestamp), lines, lights, path,
+                                                     bundle.front_bumper_m, bundle.ego_pose, lane_width)
+        if route is not None:
+            # Navigation knows every signalised stop on the route; without one on
+            # the planned path ahead the lamp controls another road.
+            if fields['red_light_distance_m'] is None:
+                fields.update(red_light=False)
+            if fields['yellow_light_distance_m'] is None:
+                fields.update(yellow_light=False, yellow_light_confidence=0.)
+        return fields, signals
 
     def predict(self, bundle):
         fields = dict(speed_limit_mps=None, speed_limit_confidence=0., lane_error_m=0.,
                       heading_error_rad=0., crossing_id=None, crossing_distance_m=None,
                       crossing_occupied=False, red_light=False, red_light_distance_m=None,
                       yellow_light=False, yellow_light_distance_m=None, yellow_light_confidence=0.,
-                      visibility_m=30., observations_valid=False)
+                      visibility_m=30., observations_valid=False,
+                      lane_source="unavailable", observation_invalid_reason=None)
         rows = []
-        if bundle.rgb is None or not bundle.valid.get("rgb", False):
-            return self._prediction(bundle, rows, fields)
         calibration = bundle.calibration.get("sensors", {}).get("rgb")
-        if calibration is None:
-            return self._prediction(bundle, rows, fields)
+        if bundle.rgb is None or not bundle.valid.get("rgb", False) or calibration is None:
+            fields["observation_invalid_reason"] = (
+                "rgb_unavailable" if bundle.rgb is None or not bundle.valid.get("rgb", False)
+                else "rgb_calibration_missing")
+            signals = None
+            if getattr(self, 'signal_tracker', None) is not None:
+                held, signals = self._track(bundle, [], bundle.ego_path)
+                fields.update(held)
+            return self._prediction(bundle, rows, fields, signals)
         depth_image = bundle.depth if bundle.valid.get("depth", bundle.depth is not None) else None
         if depth_image is not None and np.shape(depth_image) != bundle.rgb.shape[:2]:
             depth_image = None  # not pixel-aligned with the RGB frame
@@ -152,26 +199,72 @@ class VisionPerceptionProvider:
         last_lane = getattr(self, "_last_lane", None)
         acceptable = (extrapolated <= max_extrapolation if extrapolated is not None
                       else not center.get("low_confidence", True))
-        if len(points) >= 2 and np.ptp(points[:, 0]) > 1. and acceptable:
+        lane_geometry_valid = len(points) >= 2 and np.ptp(points[:, 0]) > 1.
+        lane_age = float(bundle.timestamp) - last_lane[0] if last_lane is not None else None
+        current_route = path_lane(bundle.ego_path) if bundle.ego_path is not None else None
+        route_lane = current_route if bundle.near_junction else None
+        if route_lane is not None:
+            # Junctions have no ego-lane paint; vision estimates there are missing or
+            # wrong, so navigation (planned path + odometry) is the lane reference.
+            fields.update(lane_error_m=route_lane[0], heading_error_rad=route_lane[1],
+                          observations_valid=True, lane_source="route_junction")
+            self._last_lane = (float(bundle.timestamp), *route_lane, route_lane)
+        elif lane_geometry_valid and acceptable:
             # Fit y=a*x+b in metres; image-space heading_deg is not physical yaw.
             slope, intercept = np.polyfit(points[:, 0], points[:, 1], 1)
             fields.update(lane_error_m=float(-intercept / math.hypot(1., slope)),
-                          heading_error_rad=float(-math.atan(slope)), observations_valid=True)
-            self._last_lane = (float(bundle.timestamp), fields["lane_error_m"], fields["heading_error_rad"])
-        elif (lane_hold_s > 0. and last_lane is not None and
-              0. <= float(bundle.timestamp) - last_lane[0] <= lane_hold_s):
+                          heading_error_rad=float(-math.atan(slope)), observations_valid=True,
+                          lane_source="vision")
+            self._last_lane = (float(bundle.timestamp), fields["lane_error_m"],
+                               fields["heading_error_rad"], current_route)
+        elif lane_hold_s > 0. and lane_age is not None and 0. <= lane_age <= lane_hold_s:
             # Bridge dash gaps and short unpainted stretches with the last valid estimate.
-            fields.update(lane_error_m=last_lane[1], heading_error_rad=last_lane[2],
-                          observations_valid=True)
+            # Move it with the ego's motion relative to the route: a frozen value kept the
+            # policy correcting for 2 s and drove it up to 2.3 m across the lane.
+            # Not odometry yaw for heading: holds cluster in bends, and a yaw-based heading
+            # read following the bend as an error (experiment_28 eval6: 0/6, 5 lost in holds).
+            _, error, heading, seed_route = last_lane
+            if seed_route is not None and current_route is not None:
+                error += current_route[0] - seed_route[0]
+                heading += current_route[1] - seed_route[1]
+            fields.update(lane_error_m=error, heading_error_rad=heading,
+                          observations_valid=True, lane_source="held")
+        else:
+            # No estimate yet (e.g. at spawn) has nothing to hold, so the route may stand in at once.
+            route_lane = current_route if lane_age is None or lane_age > lane_hold_s else None
+            # Navigation starts this path at the ego's projected route position.
+            # Check distance to that point as well as alignment with the path.
+            if (route_lane is not None and
+                    math.hypot(*bundle.ego_path[0]) <= ROUTE_LANE_FALLBACK_MAX_OFFSET_M and
+                    abs(route_lane[1]) <= ROUTE_LANE_FALLBACK_MAX_HEADING_RAD):
+                fields.update(lane_error_m=route_lane[0], heading_error_rad=route_lane[1],
+                              observations_valid=True, lane_source="route_fallback")
+            elif not lane_geometry_valid:
+                fields["observation_invalid_reason"] = "lane_geometry_unavailable"
+            else:
+                fields["observation_invalid_reason"] = "lane_low_confidence"
         boxes = detections.xyxy.cpu().numpy().reshape(-1, 4)
         confidences = detections.conf.cpu().numpy()
         classes = detections.cls.cpu().numpy().astype(int)
         depths, uncertainties, depth_valid = associate_depth(depth_image, boxes)
-        lights, signs = {1: [], 2: []}, []
-        for box, confidence, class_id, depth, uncertainty, has_depth in zip(
-                boxes, confidences, classes, depths, uncertainties, depth_valid):
-            if class_id in (1, 2):
-                lights[class_id].append((box, depth, has_depth, float(confidence)))
+        depth_valid &= depths < 999.
+        lamp_depths, _, lamp_valid = associate_depth(
+            np.where(depth_image < 999., depth_image, np.nan) if depth_image is not None else None,
+            boxes, min_valid_fraction=.1)
+        lights, signs = [], []
+        for box, confidence, class_id, depth, uncertainty, has_depth, lamp_depth, lamp_has_depth in zip(
+                boxes, confidences, classes, depths, uncertainties, depth_valid, lamp_depths, lamp_valid):
+            if class_id in (1, 2, 3):
+                u, v = (box[0]+box[2])/2., (box[1]+box[3])/2.
+                # Ignore sky saturation while measuring the small lamp foreground.
+                point = self.depth_point(u, v, float(lamp_depth), calibration) if lamp_has_depth else None
+                intrinsics = calibration['intrinsics_px']
+                lights.append(dict(point_ego=point, class_id=class_id, confidence=float(confidence),
+                                   bearing=((u-intrinsics['cx'])/intrinsics['fx'],
+                                            (v-intrinsics['cy'])/intrinsics['fy']),
+                                   camera_location=np.asarray(calibration['extrinsics_ego']['location_m']),
+                                   bearing_radius=np.array([(box[2]-box[0])/2./intrinsics['fx'],
+                                                            (box[3]-box[1])/2./intrinsics['fy']])))
             elif class_id == 6:
                 signs.append((box, depth, has_depth))
             elif class_id in (0, 4, 5):
@@ -185,6 +278,8 @@ class VisionPerceptionProvider:
                 if point is None:
                     # No depth and truncated/above-horizon feet: cannot be located reliably.
                     fields["observations_valid"] = False
+                    if fields["observation_invalid_reason"] is None:
+                        fields["observation_invalid_reason"] = "object_position_unavailable"
                     continue
                 row = np.zeros(16, np.float32)
                 row[:3] = point / 100.
@@ -194,17 +289,8 @@ class VisionPerceptionProvider:
                 # PerceptionPrediction.depth_m/uncertainty, which the environment writes back.
                 row[12:15] = [depth/100., 1., uncertainty/100.] if has_depth else [0., 0., 0.]
                 rows.append(row)
-        fields["red_light"], fields["red_light_distance_m"] = self._signal(
-            [light[:3] for light in lights[1]], calibration)
-        fields["yellow_light"], fields["yellow_light_distance_m"] = self._signal(
-            [light[:3] for light in lights[2]], calibration)
-        if fields["yellow_light"]:
-            fields["yellow_light_confidence"] = max(light[3] for light in lights[2])
-        if fields["red_light"]:
-            # Conflicting visible colours: red takes priority.
-            fields["yellow_light"] = False
-            fields["yellow_light_confidence"] = 0.
-            fields["yellow_light_distance_m"] = None
+        signal_fields, signals = self._signals(bundle, bgr, road, points, lights, calibration, depth_image)
+        fields.update(signal_fields)
         self._read_speed_limit(bundle, bgr, signs, calibration, fields)
         crossing_points = []
         for crossing in road.get("crosswalks", []):
@@ -218,7 +304,7 @@ class VisionPerceptionProvider:
                           crossing_occupied=any(row[6] > .5 and
                                                 abs(row[0]*100.-nearest[0]) < 5. and
                                                 abs(row[1]*100.) < 5. for row in rows))
-        return self._prediction(bundle, rows, fields)
+        return self._prediction(bundle, rows, fields, signals)
 
     def _read_speed_limit(self, bundle, bgr, signs, calibration, fields):
         """Vote on the nearest sign on our side; report the limit of the last sign passed."""
@@ -248,7 +334,7 @@ class VisionPerceptionProvider:
             fields.update(speed_limit_mps=limit_kmh / 3.6, speed_limit_confidence=float(confidence))
 
     @staticmethod
-    def _prediction(bundle, rows, fields):
+    def _prediction(bundle, rows, fields, signals=None):
         objects = np.asarray(sorted(rows, key=lambda row: row[9]), dtype=np.float32).reshape(-1, 16)
         depth_m = uncertainty = None
         if len(objects) and (objects[:, 13] > .5).any():
@@ -258,4 +344,4 @@ class VisionPerceptionProvider:
         objects[:, 12:15] = 0.
         return PerceptionPrediction(objects, depth_m=depth_m, uncertainty=uncertainty, driving=fields,
                                     frame=bundle.frame, timestamp=bundle.timestamp,
-                                    child_labels_authored=True)
+                                    child_labels_authored=True, signals=signals)

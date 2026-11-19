@@ -15,6 +15,7 @@ WAYPOINT_SPACING_M = 15.0
 MIN_EPISODE_RETURN = -500.0
 LANE_CENTER_TOLERANCE_M = 0.5
 SIGNAL_STOP_AREA_M = 2.5
+ROUTE_LANE_FALLBACK_SPEED_MPS = 1.5
 
 
 @dataclass
@@ -58,11 +59,13 @@ class DrivingState:
     crossing_violation: bool = False
     left_hazard_m: Optional[float] = None
     right_hazard_m: Optional[float] = None
+    lane_source: Optional[str] = None
+    observation_invalid_reason: Optional[str] = None
 
 
 @dataclass
 class DrivingConfig:
-    default_speed_mps: float = 3.0
+    default_speed_mps: float = 30.0 / 3.6
     max_speed_mps: float = 0.0
     min_speed_limit_confidence: float = 0.6
     following_time_s: float = 2.0
@@ -144,12 +147,17 @@ def signal_wait(state: DrivingState, config: DrivingConfig = DrivingConfig()) ->
     """Accept a stationary signal stop at the line, crossing or connected queue."""
     if (not math.isfinite(state.speed_mps) or
             not 0.0 <= state.speed_mps < config.stop_speed_mps or
-            not (state.red_light or state.yellow_light)):
+            not (state.red_light or state.yellow_light or state.red_light_queue)):
         return False
     distance = _valid_nonnegative(state.red_light_distance_m if state.red_light
                                   else state.yellow_light_distance_m)
     crossing = _valid_nonnegative(state.crossing_distance_m)
-    return bool(state.red_light_queue or
+    front = _valid_nonnegative(state.front_hazard_m)
+    # External vision can see a nearby lead vehicle without the oracle queue flag.
+    fallback_queue = (state.lane_source == "route_fallback" and state.red_light and
+                      state.vehicle_ahead and front is not None and
+                      front <= config.following_min_gap_m + config.following_time_s * ROUTE_LANE_FALLBACK_SPEED_MPS)
+    return bool(state.red_light_queue or fallback_queue or
                 (distance is not None and (distance <= SIGNAL_STOP_AREA_M or
                  (crossing is not None and crossing <= 5.0 and
                   0.0 <= distance - crossing <= 15.0))))
@@ -214,11 +222,14 @@ def compute_target_speed(state: DrivingState,
     pedestrian_risk = max(_clamp(state.pedestrian_risk, 0.0, 1.0),
                           _clamp(state.child_pedestrian_risk, 0.0, 1.0))
     child_risk = _clamp(state.child_pedestrian_risk, 0.0, 1.0)
+    # Interpolate through 0 m -> stop, 30 m -> 25/30, 80 m -> full speed.
+    visibility_factor = (state.visibility_m / 36.0 if state.visibility_m <= 30.0 else
+                         5.0 / 6.0 + (state.visibility_m - 30.0) / 300.0)
     target = base_speed * min(
         1.0 - 0.35 * _clamp(state.rain, 0.0, 1.0),
         1.0 - 0.30 * _clamp(state.wetness, 0.0, 1.0),
         1.0 - 0.30 * _clamp(state.night, 0.0, 1.0),
-        _clamp(state.visibility_m / 80.0, 0.25, 1.0),
+        _clamp(visibility_factor, 0.0, 1.0),
         1.0 - (1.0 - config.pedestrian_speed_factor) * pedestrian_risk,
         1.0 - (1.0 - config.child_pedestrian_speed_factor) * child_risk,
         config.vehicle_speed_factor if state.vehicle_ahead else 1.0)
@@ -240,6 +251,8 @@ def compute_target_speed(state: DrivingState,
                      signal_target_speed(state.yellow_light_distance_m, config, dt_s))
     if state.pedestrian_conflict or state.crossing_occupied:
         target = 0.0
+    if state.lane_source == "route_fallback":
+        target = min(target, ROUTE_LANE_FALLBACK_SPEED_MPS)
     return max(0.0, target)
 
 
@@ -420,7 +433,7 @@ class SafetySupervisor:
         # episode. Once confirmed stopped, apply bounded throttle until the
         # stop area is reached; the speed target and later hard stops still win.
         approaching = (self.config.restart_assist_enabled and state.red_light and
-                       not self._red_stopping and target > 0.5)
+                       not self._red_stopping and target > 0.0)
         if not approaching:
             self._approach_stopped_s, self._approach_assist = 0.0, False
         else:
@@ -459,6 +472,11 @@ class SafetySupervisor:
         if longitudinal > 0:
             throttle_limit = min(max(0.0, feedback), max(0.0, speed_error) /
                                  max(self.config.max_acceleration_mps2 * dt, 1e-6))
+            # Near a red the creep target (~0.4 m/s) caps throttle near 0.2, too
+            # little to move a stopped car. The approach assist keeps its throttle
+            # until that target is reached.
+            if self._approach_assist and speed_error > 0:
+                throttle_limit = max(throttle_limit, self.config.restart_max_throttle)
             if longitudinal > throttle_limit:
                 longitudinal = throttle_limit
                 reasons.append("speed_target_throttle_limit")

@@ -113,3 +113,80 @@ def test_resume_uses_configured_batch_and_sequence_size(tmp_path, capacity):
     assert sample.numel() == changed.batch * changed.sequence
     sample = sample.reshape(changed.batch, changed.sequence)
     assert (sample["step_id"].diff(dim=-1) == 1).all()
+
+
+def test_turn_sampling_reserves_batch_slots_for_turning_sequences_and_defaults_to_uniform():
+    torch.manual_seed(0)
+    cfg = replace(small_config(capacity=512, turn_sample_fraction=.5), batch=4)  # two reserved slots
+    trainer = Trainer(cfg, 5)
+    template = synthetic_batch(cfg).reshape(-1)[:cfg.sequence]
+    for sequence in range(32):  # every 4th sequence has a route point 4 m to the side, 5 m ahead
+        rows = template.clone()
+        rows["episode"] = torch.full((cfg.sequence,), sequence)
+        rows["next", "mask"][..., :2] = True
+        rows["next", "tokens"][..., 0, 15] = 1.  # valid context token
+        rows["next", "tokens"][..., 1, 15] = -1.
+        rows["next", "tokens"][..., 1, 0] = .05
+        rows["next", "tokens"][..., 1, 1] = .04 if sequence % 4 == 0 else 0.
+        trainer.replay.extend(rows)
+    uniform = Trainer(replace(cfg, turn_sample_fraction=0.), 5)
+    uniform.replay.extend(trainer.replay[:].exclude("index"))
+
+    def turning_per_batch(source):
+        draws = [source.sample() for _ in range(40)]
+        assert all(d.numel() == cfg.batch * cfg.sequence for d in draws)
+        return sum(int(e) % 4 == 0 for d in draws for e in d["episode"].reshape(cfg.batch, -1)[:, 0]) / 40
+
+    assert turning_per_batch(trainer) >= 1.9  # two reserved slots
+    assert turning_per_batch(uniform) <= 1.5  # a quarter of 4 sequences by chance
+    with pytest.raises(ValueError):
+        replace(cfg, turn_sample_fraction=1.5).validate()
+
+
+def test_standstill_sampling_balances_release_and_hold_sequences():
+    torch.manual_seed(0)
+    cfg = replace(small_config(capacity=512, standstill_sample_fraction=.5), batch=4)  # two reserved slots
+    trainer = Trainer(cfg, 5)
+    template = synthetic_batch(cfg).reshape(-1)[:cfg.sequence]
+    for sequence in range(32):  # 1 in 8 has a stopped go label, 1 in 8 a stopped red hold
+        rows = template.clone()
+        rows["episode"] = torch.full((cfg.sequence,), sequence)
+        rows["next", "tokens"][..., 0, :] = 0.
+        rows["next", "tokens"][..., 0, 15] = 1.  # valid context token
+        rows["next", "tokens"][..., 0, 0] = 5. / 30.  # moving
+        rows["next", "longitudinal_target"] = torch.ones(cfg.sequence, 1)
+        rows["next", "longitudinal_target_valid"] = torch.ones(cfg.sequence, 1, dtype=torch.bool)
+        # Mid-sequence: the sampler marks each slice's last step done, which the BC loss skips.
+        if sequence % 8 in (0, 4):
+            rows["next", "tokens"][1, 0, 0] = 0.
+        if sequence % 8 == 4:
+            rows["next", "tokens"][1, 0, 12] = 1.
+            rows["next", "longitudinal_target"][1] = -1.
+        trainer.replay.extend(rows)
+    uniform = Trainer(replace(cfg, standstill_sample_fraction=0.), 5)
+    uniform.replay.extend(trainer.replay[:].exclude("index"))
+
+    def per_batch(source, kind):
+        draws = [source.sample() for _ in range(40)]
+        assert all(d.numel() == cfg.batch * cfg.sequence for d in draws)
+        return sum(int(e) % 8 == kind for d in draws for e in d["episode"].reshape(cfg.batch, -1)[:, 0]) / 40
+
+    release, hold = per_batch(trainer, 0), per_batch(trainer, 4)
+    assert release + hold >= 1.9  # two reserved slots
+    assert release >= .6 and hold >= .6  # coin flip per slot, not all one kind
+    assert per_batch(uniform, 0) + per_batch(uniform, 4) <= 1.5  # a quarter of 4 sequences by chance
+    with pytest.raises(ValueError):
+        replace(cfg, standstill_sample_fraction=-.1).validate()
+    with pytest.raises(ValueError):
+        replace(cfg, turn_sample_fraction=.6).validate()  # .6 + .5 exceeds the batch
+
+
+def test_standstill_sampling_without_longitudinal_labels_stays_uniform():
+    cfg = replace(small_config(capacity=256, standstill_sample_fraction=.5, turn_sample_fraction=.5), batch=4)
+    trainer = Trainer(cfg, 5)
+    template = synthetic_batch(cfg).reshape(-1)[:cfg.sequence]
+    for sequence in range(32):
+        rows = template.clone()
+        rows["episode"] = torch.full((cfg.sequence,), sequence)
+        trainer.replay.extend(rows)
+    assert trainer.sample().numel() == cfg.batch * cfg.sequence

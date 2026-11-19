@@ -102,6 +102,11 @@ def route_point(sample):
     return valid, tokens[..., 1, 0] * 100., tokens[..., 1, 1] * 100.
 
 
+def pursuit_steer(x, y):
+    """Pure-pursuit steering in [-1, 1] toward a route point (x, y) metres ahead; same law as RouteController."""
+    return (torch.atan2(2. * 2.8 * y, (x*x+y*y).clamp_min(1.)) / 0.7).clamp(-0.999, 0.999)
+
+
 def route_aux_loss(world_posterior, sample):
     """Make the latent keep the near route point (metres), whatever the image looks like.
 
@@ -154,7 +159,7 @@ def corrective_steering_loss(actor, posterior, sample):
     if not valid.any():
         return posterior["state"].new_zeros(())
     # Same pure-pursuit reference as RouteController, before safety limits.
-    steer = (torch.atan2(2. * 2.8 * y, (x*x+y*y).clamp_min(1.)) / 0.7).clamp(-0.999, 0.999)
+    steer = pursuit_steer(x, y)
     features = posterior.detach()[valid].clone()
     actor.get_dist(features)
     # Fit the executed mean directly and keep sigma small. A Gaussian NLL of

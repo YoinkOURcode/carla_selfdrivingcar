@@ -59,7 +59,7 @@ class RouteController:
             yellow_light_distance_m=float(nav[6]) * 100. if nav[6] >= 0 else None,
             yellow_light_confidence=float(nav[7]))
         state.vehicle_ahead = any(
-            valid and np.isfinite(row).all() and row[8] > .5 and row[6] <= .5 and
+            valid and np.isfinite(row).all() and row[15] >= 0. and row[8] > .5 and row[6] <= .5 and
             row[0] > 0 and abs(row[1]) < .025 and np.linalg.norm(row[:3]) <= .8
             for row, valid in zip(tokens[4:], mask[4:]))
         if state.yellow_light and not 0. < state.yellow_light_confidence <= 1.:

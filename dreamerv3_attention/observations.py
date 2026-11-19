@@ -11,6 +11,9 @@ from typing import Any, Mapping
 
 import numpy as np
 
+TRAFFIC_LIGHT_TOKEN = -2.
+STOP_LINE_TOKEN = -3.
+
 
 @dataclass
 class FrameBundle:
@@ -29,6 +32,14 @@ class FrameBundle:
     valid: Mapping[str, bool] = field(default_factory=dict)
     calibration: Mapping[str, Any] = field(default_factory=dict)
     events: tuple[Mapping[str, Any], ...] = ()
+    ego_pose: tuple[float, float, float, float] | None = None  # odometry x/y/z/yaw radians
+    ego_path: np.ndarray | None = None  # planned path in ego xy metres
+    front_bumper_m: float | None = None  # static vehicle calibration, from ego origin
+    # Signalised stop lines on the planned route from navigation map geometry, as
+    # (2, 3) ego xyz endpoint arrays. Never carries signal state. None = no map data.
+    route_stop_lines: tuple[np.ndarray, ...] | None = None
+    # Navigation: the ego is inside, or about to enter, a junction on the planned route.
+    near_junction: bool = False
 
 
 def _resize_rgb(rgb: np.ndarray, size: tuple[int, int]) -> np.ndarray:

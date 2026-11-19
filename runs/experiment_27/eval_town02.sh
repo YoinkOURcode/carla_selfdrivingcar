@@ -22,6 +22,7 @@ import sys
 cfg = json.loads(Path(sys.argv[1]).read_text())
 cfg.update(perception="external", provider="dreamerv3_attention.vision:VisionPerceptionProvider",
            port=int(os.environ.get("CARLA_PORT", cfg["port"])))
+cfg["driving"]["default_speed_mps"] = 30.0 / 3.6
 # No inferred green phase/traffic-light identity is available from these models.
 cfg["driving"]["restart_assist_enabled"] = False
 Path(sys.argv[2]).write_text(json.dumps(cfg, indent=2) + "\n")

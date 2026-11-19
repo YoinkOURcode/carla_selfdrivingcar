@@ -21,10 +21,56 @@ from .weather import scenario_weather
 PEDESTRIAN_RISK_LATERAL_M = 3.5      # ...caps speed (about one lane plus the kerb)
 PEDESTRIAN_CONFLICT_LATERAL_M = 2.0  # ...forces a stop (inside the lane)
 PEDESTRIAN_LANE_M = 1.5              # ...counts as a front hazard (in the car's path)
+# Encounter actors must never block the ego. A crossing walker ends this far past the
+# route centreline (clear of the speed cap) and is then removed; a walker or released
+# vehicle that stalls is removed sooner than the ego's 7 s stationary timeout.
+WALKER_CLEAR_M = PEDESTRIAN_RISK_LATERAL_M + 1.
+WALKER_STALL_S = 1.
+ENCOUNTER_VEHICLE_STALL_S = 5.
+# Half length of the map stop segment given to providers. It must cross the coarse
+# planned-path polyline, whose chords can sit a few metres off the route on curves.
+ROUTE_STOP_HALF_SPAN_M = 4.0
+# Town01 heads stand 1.6-2.9 m before the junction, 2.3-2.6 m to the side; the
+# 90 degree camera loses them under ~1.6 m ahead of the bumper. A held red is only
+# released by seeing green, so the stop stays this far before the pole: with the
+# 2 m approach buffer the head is about 4 m ahead of the bumper at rest.
+LAMP_VIEW_SETBACK_M = 2.0
+# Town01 lane paint stops being usable about 9.4 m before a junction, so the
+# navigation lane reference starts this far before the first junction point.
+JUNCTION_APPROACH_M = 15.0
+ROUTE_POINT_SPACING_M = 2.0  # GlobalRoutePlanner sampling; bridges points inside a junction
 
 
 class _UnsupportedRoute(RuntimeError):
     pass
+
+
+def junction_entry_m(stop, step=.25, limit=20.):
+    """Lane distance from a light's stop waypoint to where its lane enters the junction.
+
+    CARLA stop waypoints mark the light's trigger area, 7-13 m before the
+    junction on Town01, so stopping there leaves the car far short of the
+    intersection. Returns 0 when no junction is found within ``limit``.
+    """
+    distance, current = 0., stop
+    while not current.is_junction:
+        following = current.next(step)
+        if not following or distance + step > limit:
+            return 0.
+        current, distance = following[0], distance + step
+    # The last point before the junction keeps the stop outside it.
+    return max(0., distance - step)
+
+
+def stop_offset_m(light, stop):
+    """Move a CARLA stop waypoint towards the junction, keeping the signal head in view."""
+    entry = junction_entry_m(stop)
+    if entry <= 0.:
+        return 0.
+    pole, origin = light.get_transform().location, stop.transform.location
+    forward = stop.transform.get_forward_vector()
+    along = (pole.x-origin.x)*forward.x + (pole.y-origin.y)*forward.y
+    return max(0., min(entry, along - LAMP_VIEW_SETBACK_M))
 
 
 def ego_coordinates(transform, location):
@@ -136,7 +182,7 @@ class CarlaEnv:
         self.steps, self.timed_steps, self.previous_action, self.previous_acceleration = 0, 0, (0., 0.), 0.
         self.episode_return = 0.0
         self.crossing_entries = set()
-        self.demo_pending = list(self.scenario.get("encounters", []))
+        self.demo_pending = []
         self.demo_walkers = []
         carla = self.carla
         spawns = self.map.get_spawn_points()
@@ -150,6 +196,12 @@ class CarlaEnv:
         ego_bp.set_attribute("role_name", "dreamerv3_attention")
         self.ego = self.world.spawn_actor(ego_bp, spawns[start])
         self.actors.append(self.ego)
+        if self.cfg.night_headlights and self.world.get_weather().sun_altitude_angle < 0:
+            # Measured on Town01 at night: the Tesla's low beams do not visibly
+            # brighten the road in the RGB camera; high beams roughly double it.
+            self.ego.set_light_state(carla.VehicleLightState(
+                carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam |
+                carla.VehicleLightState.HighBeam))
         # Actor transforms are cached from snapshots; a new actor reads as the
         # world origin until the first tick, misplacing ego-relative hazards.
         self.world.tick()
@@ -161,6 +213,7 @@ class CarlaEnv:
                              "crosswalk_map_annotations": bool(self.map.get_crosswalks()),
                              "scenario": self.scenario.get("name", "basic")}
         self._spawn_hazards()
+        self._preload_encounters()
         # Walker controllers need their parent's first snapshot before start().
         self.world.tick()
         self._start_npcs()
@@ -197,6 +250,8 @@ class CarlaEnv:
             route, crossings = self._route_geometry(waypoints)
             if route.length < float(self.scenario.get("minimum_route_length_m", 0.)):
                 raise _UnsupportedRoute("Unsupported scenario: selected route is shorter than the demo minimum")
+            if route.length > float(self.scenario.get("maximum_route_length_m", math.inf)):
+                raise _UnsupportedRoute("Unsupported scenario: selected route is longer than the maximum")
             return start, end, waypoints, route, crossings
 
         import networkx as nx
@@ -241,6 +296,8 @@ class CarlaEnv:
                 if route.length < minimum_length:
                     continue
                 if route.length < float(self.scenario.get("minimum_route_length_m", 0.)):
+                    continue
+                if route.length > float(self.scenario.get("maximum_route_length_m", math.inf)):
                     continue
                 pool.append((a, b, waypoints, route, crossings))
                 starts.add(a)
@@ -320,6 +377,15 @@ class CarlaEnv:
                 raise _UnsupportedRoute("Unsupported scenario: route has no usable traffic-light stop")
         return route, crossings
 
+    def _near_junction(self, progress):
+        """Route junction within the approach distance ahead, or the ego inside one."""
+        junctions = self.route.junctions
+        if junctions is None:
+            return False
+        stations = self.route.cumulative[junctions]
+        return bool(np.any((stations >= progress - ROUTE_POINT_SPACING_M) &
+                           (stations <= progress + JUNCTION_APPROACH_M)))
+
     def _cache_traffic_stops(self, waypoints):
         """Match stop geometry to each occurrence of its lane on this route."""
         self.traffic_stops = self._route_traffic_stops(waypoints, self.route)
@@ -336,6 +402,7 @@ class CarlaEnv:
         for light, stop_waypoints in light_waypoints:
             positions = []
             for stop in stop_waypoints:
+                entry = stop_offset_m(light, stop)
                 point = np.asarray([stop.transform.location.x, stop.transform.location.y])
                 forward = stop.transform.get_forward_vector()
                 direction = np.asarray([forward.x, forward.y])
@@ -354,7 +421,7 @@ class CarlaEnv:
                     projected = route.points[index] + fraction*delta
                     if np.linalg.norm(point-projected) > min(1.0, stop.lane_width/4.):
                         continue
-                    position = float(route.cumulative[index] + fraction*length)
+                    position = min(float(route.cumulative[index] + fraction*length) + entry, route.length)
                     if not any(abs(position-other) < 0.1 for other in positions):
                         positions.append(position)
             stops.extend((light, position) for position in positions)
@@ -401,25 +468,65 @@ class CarlaEnv:
                 state.traffic_light_id = str(light.id)
                 state.traffic_light_phase = phase_name
                 state.traffic_light_distance_m = distance
+        if stop_phase_seen:
+            return None
+        # A long queue can hold the ego behind a red beyond the lookahead. Return
+        # that stop for the queue check only; it stays out of the driving state.
+        ahead = next(((light, position-state.route_progress_m-bumper) for light, position in self.traffic_stops
+                      if position-state.route_progress_m-bumper >= 0.), None)
+        if (ahead is None or ahead[1] <= lookahead or ahead[0].get_state() not in
+                (self.carla.TrafficLightState.Red, self.carla.TrafficLightState.Yellow)):
+            return None
+        return ahead[1]
+
+    def _preload_encounters(self):
+        """Spawn every encounter actor now, held in place until the ego reaches its trigger."""
+        for event in self.scenario.get("encounters", []):
+            entry = self._spawn_demo_actor(event)
+            if entry is not None:
+                self.demo_pending.append(entry)
 
     def _demo_encounters(self, progress):
-        """Start each configured encounter once as the ego advances."""
+        """Release each preloaded encounter once as the ego advances."""
         while self.demo_pending and progress >= self.demo_pending[0]["trigger_m"]:
-            event = self.demo_pending.pop(0)
-            self._spawn_demo_actor(event, progress)
+            entry = self.demo_pending.pop(0)
+            actor = entry["actor"]
+            if not actor.is_alive:
+                continue
+            if entry["kind"] == "vehicle":
+                if self.traffic_manager is None:
+                    self.traffic_manager = self.client.get_trafficmanager()
+                    self.traffic_manager.set_synchronous_mode(True)
+                    self.traffic_manager.set_random_device_seed(self.cfg.seed)
+                actor.apply_control(self.carla.VehicleControl(hand_brake=False))
+                if self.cfg.night_headlights:
+                    # Traffic manager switches lights by time of day, like background traffic.
+                    self.traffic_manager.update_vehicle_lights(actor, True)
+                actor.set_autopilot(True, self.traffic_manager.get_port())
+                spec = {"speed_mps": 3., "encounter": True}
+                if entry.get("release_s"):
+                    # After this long the lead vehicle drives off (see _update_npcs).
+                    spec["release_step"] = self.steps + round(float(entry["release_s"]) / self.cfg.dt)
+                self.moving.append((actor, spec))
+            else:
+                actor.apply_control(self.carla.WalkerControl(direction=entry["direction"], speed=1.))
+                self.demo_walkers.append((actor, entry["origin"], entry["direction"], entry["crossing_m"], 0., 0))
         remaining = []
-        for actor, origin, direction, distance in self.demo_walkers:
+        for actor, origin, direction, distance, furthest, still in self.demo_walkers:
             if not actor.is_alive:
                 continue
             location = actor.get_location()
             moved = ((location.x - origin.x) * direction.x + (location.y - origin.y) * direction.y)
-            if moved >= distance:
-                actor.apply_control(self.carla.WalkerControl(direction=direction, speed=0.))
+            still = 0 if moved > furthest + .01 else still + 1
+            if moved >= distance or still * self.cfg.dt >= WALKER_STALL_S:
+                actor.destroy()  # crossed (or stuck): gone, so it cannot stand in the ego's path
             else:
-                remaining.append((actor, origin, direction, distance))
+                remaining.append((actor, origin, direction, distance, max(furthest, moved), still))
         self.demo_walkers = remaining
 
-    def _spawn_demo_actor(self, event, progress):
+    def _spawn_demo_actor(self, event):
+        """Place the actor ahead of its trigger; returns a pending entry, or None if skipped."""
+        progress = event["trigger_m"]
         kind = event["kind"]
         library = self.world.get_blueprint_library()
         child_ids = {"walker.pedestrian.%04d" % i for i in (9, 10, 11, 12, 13, 14, 48, 49)}
@@ -434,7 +541,9 @@ class CarlaEnv:
         bp = candidates[int(self.rng.integers(len(candidates)))]
         if bp.has_attribute("is_invincible"):
             bp.set_attribute("is_invincible", "false")
-        for ahead in (30., 28., 26., 24., 22.):
+        # Start 40 m beyond the trigger, so the ego never meets an actor at close range.
+        # A fixed spot may fall beside a junction or missing sidewalk: search farther along.
+        for ahead in range(40, 142, 2):
             s = min(progress + ahead, self.route.length - 5.)
             i = min(int(np.searchsorted(self.route.cumulative, s, side="right") - 1), len(self.route.delta) - 1)
             if self.route.junctions is not None and self.route.junctions[i]:
@@ -461,7 +570,8 @@ class CarlaEnv:
                     if sidewalk is None or sidewalk.transform.location.distance(curb) > 3.:
                         continue
                     origin = sidewalk.transform.location + self.carla.Location(z=.5)
-                    if (origin.x - point[0]) * nx + (origin.y - point[1]) * ny < 2.:
+                    offset = (origin.x - point[0]) * nx + (origin.y - point[1]) * ny
+                    if offset < 2.:
                         continue
                     transform = self.carla.Transform(origin)
                     direction = self.carla.Vector3D(x=float(-nx), y=float(-ny), z=0.)
@@ -472,22 +582,18 @@ class CarlaEnv:
             if actor is None:
                 continue
             self.actors.append(actor)
+            entry = {**event, "actor": actor}
             if kind == "vehicle":
-                if self.traffic_manager is None:
-                    self.traffic_manager = self.client.get_trafficmanager()
-                    self.traffic_manager.set_synchronous_mode(True)
-                    self.traffic_manager.set_random_device_seed(self.cfg.seed)
-                actor.set_autopilot(True, self.traffic_manager.get_port())
-                self.moving.append((actor, {"speed_mps": 3.}))
+                actor.apply_control(self.carla.VehicleControl(brake=1., hand_brake=True))
             else:
-                actor.apply_control(self.carla.WalkerControl(direction=direction, speed=1.))
-                self.demo_walkers.append((actor, origin, direction, 9.))
-            return
+                # Cross the whole road: from the kerb, over the centreline, to WALKER_CLEAR_M beyond it.
+                entry.update(origin=origin, direction=direction, crossing_m=offset + WALKER_CLEAR_M)
+            return entry
         if self.scenario.get("optional_encounters"):
             # Randomized training routes cannot guarantee a sidewalk or straight road at every trigger.
             logging.getLogger(__name__).warning("Skipping %s encounter at %.0f m: no valid spawn", kind, progress)
-            return
-        raise RuntimeError(f"Demonstration cannot spawn {kind} on the route ahead")
+            return None
+        raise RuntimeError(f"Required {kind} encounter at {progress:.0f} m could not be placed on the route")
 
     def _spawn_hazards(self):
         self.moving = []
@@ -714,7 +820,18 @@ class CarlaEnv:
                 if actor.type_id.startswith("vehicle.") and spec.get("speed_mps", 0) > 0:
                     limit = float(actor.get_speed_limit())
                     target = min(float(spec["speed_mps"])*3.6, .8*limit) if math.isfinite(limit) else 0.
+                    if "release_step" in spec and self.steps >= spec["release_step"] and math.isfinite(limit):
+                        target = 1.5*limit  # outpace the ego so it stops being a slow lead
                     self.traffic_manager.set_desired_speed(actor, max(0., target))
+                if spec.get("encounter"):
+                    velocity = actor.get_velocity()
+                    at_signal = (actor.is_at_traffic_light() and
+                                 actor.get_traffic_light_state() != self.carla.TrafficLightState.Green)
+                    moving = math.hypot(velocity.x, velocity.y) >= .1
+                    spec["still_steps"] = 0 if moving or at_signal else spec.get("still_steps", 0) + 1
+                    if spec["still_steps"] * self.cfg.dt >= ENCOUNTER_VEHICLE_STALL_S:
+                        actor.destroy()  # a stuck lead vehicle would hold the ego indefinitely
+                        continue
             except RuntimeError as exc:
                 # is_alive itself can raise after the actor proxy is cleared.
                 if "trying to operate on a destroyed actor" not in str(exc):
@@ -800,6 +917,7 @@ class CarlaEnv:
         yaw = math.radians(transform.rotation.yaw)
         speed = math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
         weather = self.world.get_weather()
+        visibility_m = min(60., max(5., 100.*(1.-weather.fog_density/110.)))
         speed_limit = self.ego.get_speed_limit() / 3.6
         waypoint = self.map.get_waypoint(transform.location)
         physical_waypoint = self.map.get_waypoint(
@@ -812,10 +930,11 @@ class CarlaEnv:
         state = DrivingState(speed_mps=speed, speed_limit_mps=speed_limit if speed_limit > 0 else None,
                              lane_error_m=lateral,
                              heading_error_rad=math.atan2(math.sin(yaw-heading), math.cos(yaw-heading)),
+                             lane_source="ground_truth",
                              route_progress_m=progress, rain=weather.precipitation/100., wetness=weather.wetness/100.,
                              lane_width_m=lane_width,
                              night=float(weather.sun_altitude_angle < 0),
-                             visibility_m=max(5., 100.*(1.-weather.fog_density/110.)),
+                             visibility_m=visibility_m,
                              lane_departure=abs(lateral) > lane_width/2. + departure_margin,
                              offroad=physical_waypoint is None,
                              observations_valid=sensors_valid)
@@ -881,9 +1000,10 @@ class CarlaEnv:
                 if valid[0] and abs(depth[0]-expected) < max(3., expected*0.25):
                     row[12:15] = [depth[0]/100., 1., uncertainty[0]/100.]
             rows.append((distance, row))
-        self._observe_traffic_light(state, self.ego.bounding_box.location.x + bumper)
-        signal_distance = state.red_light_distance_m if state.red_light else state.yellow_light_distance_m
-        if (state.red_light or state.yellow_light) and signal_distance is not None:
+        queue_signal = self._observe_traffic_light(state, self.ego.bounding_box.location.x + bumper)
+        signal_distance = (state.red_light_distance_m if state.red_light else
+                           state.yellow_light_distance_m if state.yellow_light else queue_signal)
+        if signal_distance is not None:
             # Build the stationary queue backwards from the stop line.
             queue_end = state.route_progress_m + bumper + signal_distance
             vehicles = []
@@ -910,6 +1030,26 @@ class CarlaEnv:
         objects = (np.stack([row for _, row in sorted(rows, key=lambda pair: pair[0])]) if rows else
                    np.zeros((0, 16), np.float32))
         if self.provider:
+            # Navigation and ego odometry are available independently of scene truth.
+            stations = np.minimum(progress + np.array([0., 5., 10., 15., 20., 30., 45., 60., 80.]), self.route.length)
+            planned = np.column_stack([np.interp(stations, self.route.cumulative, self.route.points[:, axis])
+                                       for axis in (0, 1)])
+            path_ego = np.asarray([ego_coordinates(transform, self.carla.Location(
+                x=float(p[0]), y=float(p[1]), z=transform.location.z))[:2] for p in planned])
+            # Signalised stop positions on the planned route, as map geometry only:
+            # a transverse segment across the route at each stop, never the signal phase.
+            stop_lines = []
+            for _, position in self.traffic_stops:
+                if not progress <= position <= stations[-1]:
+                    continue
+                index = min(max(int(np.searchsorted(self.route.cumulative, position, "right"))-1, 0),
+                            len(self.route.delta)-1)
+                tangent = self.route.delta[index] / self.route.lengths[index]
+                centre = np.array([np.interp(position, self.route.cumulative, self.route.points[:, axis])
+                                   for axis in (0, 1)])
+                normal = np.array([-tangent[1], tangent[0]]) * ROUTE_STOP_HALF_SPAN_M
+                stop_lines.append(np.asarray([ego_coordinates(transform, self.carla.Location(
+                    x=float(p[0]), y=float(p[1]), z=transform.location.z)) for p in (centre-normal, centre+normal)]))
             # Camera-only providers see the RGB camera, plus the depth camera mounted with
             # it when they declare uses_depth_camera (stand-in for a real depth sensor).
             uses_depth = camera_only and bool(getattr(self.provider, "uses_depth_camera", False))
@@ -920,6 +1060,12 @@ class CarlaEnv:
                                        calibration={"sensors": {name: bundle.calibration.get(
                                            "sensors", {}).get(name) for name in camera_sensors}})
                                if camera_only else bundle)
+            provider_bundle = replace(provider_bundle,
+                                      ego_pose=(transform.location.x, transform.location.y, transform.location.z, yaw),
+                                      ego_path=path_ego,
+                                      front_bumper_m=float(self.ego.bounding_box.location.x+bumper),
+                                      route_stop_lines=tuple(stop_lines),
+                                      near_junction=self._near_junction(progress))
             prediction = self.provider.predict(provider_bundle)
             prediction.validate_for(bundle)
             if self.cfg.perception == "external":
@@ -943,6 +1089,8 @@ class CarlaEnv:
             if forbidden & fields.keys():
                 raise ValueError("External providers may replace perception fields only")
             state = replace(state, **fields)
+            # Simulator fog supplies visibility in every perception mode.
+            state.visibility_m = visibility_m
             confidence = state.yellow_light_confidence
             distance = state.yellow_light_distance_m
             yellow_valid = (isinstance(state.yellow_light, (bool, np.bool_)) and
@@ -955,6 +1103,10 @@ class CarlaEnv:
                              math.isfinite(distance) and distance >= 0.)))
             state.observations_valid &= yellow_valid
             state.observations_valid &= not missing_required and sensors_valid
+            if missing_required:
+                state.observation_invalid_reason = "missing_perception_fields"
+            elif not yellow_valid:
+                state.observation_invalid_reason = "invalid_yellow_light"
             objects = prediction.objects.copy()
             if not prediction.child_labels_authored:
                 objects[:, 7] = 0.
@@ -1001,7 +1153,11 @@ class CarlaEnv:
             radars[name] = readings
         critical = [state.speed_mps, state.speed_limit_confidence, state.lane_error_m, state.heading_error_rad,
                     state.rain, state.wetness, state.night, state.visibility_m, state.pedestrian_risk]
-        state.observations_valid &= bool(np.isfinite(critical).all())
+        if not np.isfinite(critical).all():
+            state.observations_valid = False
+            state.observation_invalid_reason = "nonfinite_perception_fields"
+        if not state.observations_valid and state.observation_invalid_reason is None:
+            state.observation_invalid_reason = "provider_invalid" if sensors_valid else "required_sensor_invalid"
         context = np.asarray([state.speed_mps/30., (state.speed_limit_mps or 0)/30., state.speed_limit_confidence,
                               state.lane_error_m/4., state.heading_error_rad/math.pi,
                               (self.route.length-progress)/1000.,
@@ -1027,7 +1183,9 @@ class CarlaEnv:
                             if state.yellow_light_distance_m is not None else -1.)
                 token[7] = state.yellow_light_confidence
             navigation.append(token)
-        objects = np.concatenate((np.asarray(navigation), objects[:self.cfg.max_objects]), axis=0)
+        signals = prediction.signals[:min(4, self.cfg.max_objects)] if self.provider else np.zeros((0, 16))
+        objects = np.concatenate((np.asarray(navigation), signals,
+                                  objects[:self.cfg.max_objects-len(signals)]), axis=0)
         observation = pack_observation(bundle.rgb, context, objects, radars, max_objects=self.cfg.max_objects+3,
                                        model_size=(self.cfg.image_size, self.cfg.image_size),
                                        radar_valid={} if camera_only else bundle.valid)
@@ -1128,6 +1286,8 @@ class CarlaEnv:
                 "termination_reason": "reward_limit" if reward_limit else termination_reason,
                 "episode_return": self.episode_return,
                 "policy_observations_valid": state.observations_valid, "perception_source": self.cfg.perception,
+                "policy_lane_source": state.lane_source,
+                "policy_observation_invalid_reason": state.observation_invalid_reason,
                 "external_fields": self.cfg.mixed_fields if self.cfg.perception == "mixed" else self.cfg.perception,
                 "sensor_valid": dict(self.last_bundle.valid),
                 "route_length_m": self.route.length, **asdict(oracle)}

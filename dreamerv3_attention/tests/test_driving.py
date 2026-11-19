@@ -15,7 +15,16 @@ from dreamerv3_attention.driving import (
 class TargetSpeedTests(unittest.TestCase):
     def test_uncertain_limit_uses_conservative_configured_default(self):
         self.assertEqual(compute_target_speed(DrivingState(
-            speed_limit_mps=20.0, speed_limit_confidence=0.1)), 3.0)
+            speed_limit_mps=20.0, speed_limit_confidence=0.1)), 30.0 / 3.6)
+
+    def test_unknown_limit_uses_30_kmh_without_changing_observed_limit(self):
+        state = DrivingState(speed_limit_mps=None, speed_limit_confidence=0.)
+        self.assertEqual(compute_target_speed(state), 30.0 / 3.6)
+        self.assertIsNone(state.speed_limit_mps)
+        self.assertEqual(state.speed_limit_confidence, 0.)
+        self.assertEqual(compute_target_speed(state, DrivingConfig(default_speed_mps=3.)), 3.)
+        state.speed_limit_mps, state.speed_limit_confidence = 5., 1.
+        self.assertEqual(compute_target_speed(state), 5.)
 
     def test_weather_and_pedestrian_risk_lower_target(self):
         clear = compute_target_speed(DrivingState(speed_limit_mps=12))
@@ -176,7 +185,7 @@ class RewardTests(unittest.TestCase):
     def test_lane_departure_and_speeding_gate_progress(self):
         start = DrivingState(route_progress_m=1)
         for violation in (DrivingState(route_progress_m=2, lane_departure=True),
-                          DrivingState(route_progress_m=2, speed_mps=4)):
+                          DrivingState(route_progress_m=2, speed_mps=30. / 3.6 + 1.)):
             result = compute_reward(start, (0, 0), violation)
             self.assertEqual(result.components["progress"], 0)
 

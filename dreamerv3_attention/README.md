@@ -126,8 +126,8 @@ Use `--training-run runs/NAME` to select a specific training or evaluation run, 
 captured frame labeled as ended. Monitoring requires a run started with
 this version: an already-running older process cannot publish camera frames
 until its next approved launch. The viewer never starts or stops the monitored run.
-Each new live run keeps only its latest snapshot in `live.json`, beside a
-held `live.lock`; historical metrics and checkpoints are unchanged.
+Each new live run keeps only its latest snapshot in `live.json` and its latest
+camera frame in `live.jpg`, beside a held `live.lock`; historical metrics and checkpoints are unchanged.
 
 To launch a separate checkpoint drive, select **Destination drive** and start
 the viewer with a checkpoint and a driving budget:
@@ -347,7 +347,9 @@ missing fields force a stop. A reported yellow requires confidence greater than
 zero; invalid confidence, distance, or simultaneous red and yellow fails safe.
 All positive confidence values receive the same response; no uncalibrated
 confidence threshold is assumed. Providers must associate the light with the
-route and supply stop-line distance, not distance to the light itself. Object detections also drive safety hazard state.
+route and supply stop-line distance, not distance to the light itself. Providers
+receive `FrameBundle.route_stop_lines`: the route's signalised stop lines on the
+planned path, from map geometry only (never signal state). Object detections also drive safety hazard state.
 Mixed mode requires a nonempty explicit `mixed_fields` list; other state fields
 remain GT and are labeled mixed. Objects come from the external provider.
 External depth can replace/supplement object depth without changing the model.
@@ -382,11 +384,12 @@ training and cleans owned actors. Resume begins a fresh simulator episode and
 keeps replay, parameters, targets, optimizer, counters and RNG; it does not
 promise the same subsequent CARLA trajectory.
 
-The existing `data/start_server.sh` adds `-carla-rgb-only`. In this checkout the
-flag disables semantic/instance annotation proxies; live testing confirmed RGB,
-scene depth and radar still work. It does not establish semantic-camera support.
-Use an idle dedicated server, or the runner's owned-server option, which omits
-the flag. `--ue4-root` points to the built Unreal Engine directory. Startup and
+The existing `data/start_server.sh` leaves `-carla-rgb-only` off. In this checkout
+the flag disables tagged geometry needed by depth and semantic/instance cameras,
+so use it only for RGB-only collection. Live checks without the flag confirmed
+RGB, depth and both segmentation cameras on Town01 and Town02.
+Use an idle dedicated server, or the runner's owned-server option.
+`--ue4-root` points to the built Unreal Engine directory. Startup and
 all simulation/learning share one workload lock. Never run a second job.
 
 ```bash
@@ -414,6 +417,12 @@ to cycle through conditions in order, switching after each completed episode:
 ```
 
 These use `HardRainNoon`, `ClearNight`, and `HardRainNight`, respectively.
+Set `"night_headlights": true` to switch on the ego's low and high beams when the
+sun is below the horizon, and to let the traffic manager light encounter vehicles
+as it already does for background traffic. Low beams alone did not measurably
+brighten the road in the camera; high beams roughly double the near-road
+brightness, which is still dark. It is off by default because existing
+checkpoints were trained on unlit night camera frames.
 Keep `scenario` at its default, `"basic"`, when using the list. Names must
 belong to the configured split; a custom `scenario_file` can supply your own
 weather presets, routes and actor placements. Check that the authored spawn
@@ -550,6 +559,22 @@ points. This supplies corrective targets at drifted actor states; it does not
 supervise throttle, change dynamics/rewards or bypass runtime safety. Default
 0 disables it. Changes on resume automatically record `supervision_fork` in
 new checkpoints.
+
+`route_aux_weight` adds a world-model loss on the reconstructed 5 m route point
+(metres), so the latent keeps the lateral offset that steering depends on.
+Navigation tokens are scaled by 1/100, which makes them negligible for the
+ordinary reconstruction loss: in experiment 28 the latent carried no usable
+route point on sharp corners. Adds no parameters, so it can be enabled on
+resume. `turn_sample_fraction` reserves that share of each batch for replay
+sequences containing sharp turns (pure-pursuit steer above 0.3), which are about
+6% of replay; 0 keeps uniform sampling. Both default to 0.
+`standstill_sample_fraction` reserves a share for sequences where the car is
+stopped, half (in expectation) with a longitudinal go label and half holding at
+a red. Release after a red stop is about 0.2% of replay, and the experiment 28
+actor stayed braked there. It needs longitudinal labels, defaults to 0, and
+together with `turn_sample_fraction` cannot exceed 1.
+`runs/experiment_28/analysis/standstill_probe.py` measures the actor on these
+states offline, re-encoded with each checkpoint's world model.
 
 `actor_longitudinal_bc_weight` adds throttle/brake supervision on valid next
 policy states, including states visited by the actor. It defaults to 0;

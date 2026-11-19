@@ -82,7 +82,7 @@ def test_snapshot_uses_actual_controls_full_camera_and_measured_units():
     state = snapshot(env, observation(), None, 3.25, {"interventions": ["pedestrian"]}, "dreamer")
     assert state["speed_kmh"] == 7.2 and state["speed_limit_kmh"] == 36.
     assert state["distance_m"] == 3.25 and state["controls"]["throttle"] == .3
-    assert state["image"].startswith("data:image/jpeg;base64,")
+    assert state["image"].startswith(b"\xff\xd8")  # raw JPEG, kept out of the JSON state
     assert state["interventions"] == ["pedestrian"]
     assert state["objects"][0]["attention"] is None
     env.last_bundle.valid["rgb"] = False
@@ -119,14 +119,14 @@ def test_episode_rewards_uses_only_measured_values_and_reward_speed_fallback():
     rows = {row["name"]: row for row in rewards.snapshot()["reward_breakdown"]}
     assert rows["Lane keeping"]["value"] == "mean 2.00 m offset"
     assert rows["Target tracking"]["value"] == "mean 1.00 m/s error"
-    assert rows["Speeding"]["value"] == "max 1.00 m/s over limit"
+    assert rows["Speeding"]["value"] == "max 0.00 m/s over limit"
     assert rows["Lane departure"]["value"] == "—"
 
     for limit, confidence in ((None, "missing"), (float("nan"), "missing"),
                               (10., None), (10., float("nan")), (10., .1), (10., 1.)):
         fallback = EpisodeRewards()
         record = {"reward": -1., "reward_components": {"speeding": -1.},
-                  "speed_mps": 4., "speed_limit_mps": limit}
+                  "speed_mps": 30. / 3.6 + 1., "speed_limit_mps": limit}
         if confidence != "missing":
             record["speed_limit_confidence"] = confidence
         fallback.add(record)
@@ -310,6 +310,33 @@ def test_http_dashboard_status_and_local_control_contract():
             with urlopen(request) as response:
                 assert json.load(response)["ok"]
             assert viewer.stop_event.is_set()
+        finally:
+            server.shutdown()
+            worker.join()
+
+
+def test_frame_is_served_as_jpeg_and_not_embedded_in_state():
+    viewer = Viewer(Config(), arguments(budget_seconds=None))
+    viewer.publish(snapshot(FakeEnv(), observation(), None, 0., {}, "dreamer"))
+    state = viewer.read()
+    assert state["image"] == "/api/frame.jpg?v=1"
+    json.dumps(state, allow_nan=False)
+    with make_server(viewer, 0) as server:
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        url = f"http://127.0.0.1:{server.server_port}"
+        try:
+            with urlopen(url + state["image"]) as response:
+                assert response.headers["Content-Type"] == "image/jpeg"
+                assert response.read(2) == b"\xff\xd8"
+            with pytest.raises(HTTPError) as exc:  # no training run was published
+                urlopen(url + "/api/training/frame.jpg")
+            assert exc.value.code == 404
+            viewer.publish({**snapshot(FakeEnv(), observation(), None, 0., {}, "dreamer"), "image": None})
+            assert viewer.read()["image"] is None
+            with pytest.raises(HTTPError) as exc:
+                urlopen(url + "/api/frame.jpg")
+            assert exc.value.code == 404
         finally:
             server.shutdown()
             worker.join()

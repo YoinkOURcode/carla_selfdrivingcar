@@ -41,6 +41,15 @@ class Config:
     use_pixels: bool = True
     # Weight of an extra world-model loss on the reconstructed near route point.
     route_aux_weight: float = 0.0
+    # Share of each training batch reserved for replay sequences that contain sharp turns
+    # (pure-pursuit steer above 0.3). Turns are a few percent of replay, so uniform sampling
+    # rarely shows the actor the states where steering matters. 0 keeps uniform sampling.
+    turn_sample_fraction: float = 0.0
+    # Share of each batch reserved for sequences where the car is stopped: in expectation half
+    # where the longitudinal label says go (release) and half where it holds at a red. The actor
+    # held full brake after the light cleared in every post-stop release of experiment_28 eval1,
+    # and release states are under 1% of replay. 0 keeps uniform sampling.
+    standstill_sample_fraction: float = 0.0
     steps: int = 10000
     max_episode_steps: int = 1000
     inactivity_timeout_s: float = 15.0
@@ -76,6 +85,8 @@ class Config:
     scenario: str = "basic"
     scenarios: list[str] = field(default_factory=list)
     randomize_routes: bool = True
+    # Off by default: existing checkpoints were trained on unlit ego night frames.
+    night_headlights: bool = False
     split: str = "train"
 
     def validate(self):
@@ -99,6 +110,8 @@ class Config:
                 previous = trigger
         if not isinstance(self.randomize_routes, bool):
             raise ValueError("randomize_routes must be a boolean")
+        if not isinstance(self.night_headlights, bool):
+            raise ValueError("night_headlights must be a boolean")
         if self.warmup_policy not in ("random", "controller"):
             raise ValueError("warmup_policy must be random or controller")
         if not isinstance(self.world_model_warmup_updates, int) or self.world_model_warmup_updates < 0:
@@ -115,6 +128,12 @@ class Config:
             raise ValueError("use_pixels must be a boolean")
         if not math.isfinite(self.route_aux_weight) or self.route_aux_weight < 0:
             raise ValueError("route_aux_weight must be finite and nonnegative")
+        if not math.isfinite(self.turn_sample_fraction) or not 0 <= self.turn_sample_fraction <= 1:
+            raise ValueError("turn_sample_fraction must be a probability")
+        if not math.isfinite(self.standstill_sample_fraction) or not 0 <= self.standstill_sample_fraction <= 1:
+            raise ValueError("standstill_sample_fraction must be a probability")
+        if self.turn_sample_fraction + self.standstill_sample_fraction > 1:
+            raise ValueError("turn_sample_fraction and standstill_sample_fraction together cannot exceed 1")
         if self.actor_bc_weight and self.warmup_policy != "controller":
             raise ValueError("actor_bc_weight requires controller warmup")
         if not isinstance(self.expert_episode_interval, int) or self.expert_episode_interval < 0:
