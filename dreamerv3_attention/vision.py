@@ -57,6 +57,51 @@ def path_lane(path):
     return float(lateral), float(-math.atan2(delta[index, 1], delta[index, 0]))
 
 
+LIGHT_CLASSES = (1, 2, 3)
+RED_LIGHT_CLASS = 1
+# Share of the smaller light box inside the larger one that marks both as the same head.
+# Annotators boxed either the whole housing or only the lit lamp, so the detector often
+# returns both on one head: 558 nested pairs on 500 held-out Round 2 test frames, all but
+# one the same colour. Same rule as perception/dedupe.py, which merges them for display.
+LIGHT_NESTED_CONTAINMENT = 0.7
+
+
+def merge_nested_lights(boxes, confidences, classes, containment=LIGHT_NESTED_CONTAINMENT):
+    """Collapse traffic-light boxes nested on one head into the larger box.
+
+    The larger box is kept with the higher confidence. A conflicting colour pair
+    resolves as the signal tracker does for competing heads: red if either is red,
+    otherwise the more confident colour. Vehicles, pedestrians and signs pass
+    through unchanged, so a child box inside an adult box is never dropped here.
+    Returns filtered (boxes, confidences, classes) in the original order.
+    """
+    boxes = np.asarray(boxes, dtype=float).reshape(-1, 4)
+    confidences = np.asarray(confidences, dtype=float).reshape(-1).copy()
+    classes = np.asarray(classes).astype(int).reshape(-1).copy()
+    if not (len(boxes) == len(confidences) == len(classes)):
+        raise ValueError("boxes, confidences and classes must have the same length")
+    areas = np.clip(boxes[:, 2]-boxes[:, 0], 0., None) * np.clip(boxes[:, 3]-boxes[:, 1], 0., None)
+    lights = [i for i in np.argsort(-areas, kind="stable")
+              if classes[i] in LIGHT_CLASSES and np.isfinite(boxes[i]).all() and areas[i] > 0.]
+    keep = np.ones(len(boxes), bool)
+    kept = []
+    for i in lights:
+        for k in kept:
+            width = min(boxes[k, 2], boxes[i, 2]) - max(boxes[k, 0], boxes[i, 0])
+            height = min(boxes[k, 3], boxes[i, 3]) - max(boxes[k, 1], boxes[i, 1])
+            if max(width, 0.) * max(height, 0.) / areas[i] >= containment:
+                if RED_LIGHT_CLASS in (classes[k], classes[i]):
+                    classes[k] = RED_LIGHT_CLASS
+                elif confidences[i] > confidences[k]:
+                    classes[k] = classes[i]
+                confidences[k] = max(confidences[k], confidences[i])
+                keep[i] = False
+                break
+        else:
+            kept.append(i)
+    return boxes[keep], confidences[keep], classes[keep]
+
+
 def _env_float(name, default, low, high):
     value = float(os.environ.get(name, default))
     if not low <= value <= high:
@@ -284,6 +329,7 @@ class VisionPerceptionProvider:
         boxes = detections.xyxy.cpu().numpy().reshape(-1, 4)
         confidences = detections.conf.cpu().numpy()
         classes = detections.cls.cpu().numpy().astype(int)
+        boxes, confidences, classes = merge_nested_lights(boxes, confidences, classes)
         depths, uncertainties, depth_valid = associate_depth(depth_image, boxes)
         depth_valid &= depths < 999.
         lamp_depths, _, lamp_valid = associate_depth(

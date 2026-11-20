@@ -11,7 +11,7 @@ import torch
 from dreamerv3_attention.driving import DrivingConfig, DrivingState, SafetySupervisor
 from dreamerv3_attention.observations import FrameBundle
 from dreamerv3_attention.sensors import SensorFrameBuffer
-from dreamerv3_attention.vision import VisionPerceptionProvider, path_lane
+from dreamerv3_attention.vision import VisionPerceptionProvider, merge_nested_lights, path_lane
 
 
 def calibration():
@@ -247,6 +247,48 @@ def test_yellow_light_distance_and_red_priority():
     p, b = measured_signal_scene((1,2))
     both = p.predict(b).driving
     assert both["red_light"] and not both["yellow_light"] and both["yellow_light_distance_m"] is None
+
+
+def test_nested_light_boxes_on_one_head_merge_into_the_larger_box():
+    housing, lamp = [100., 100., 120., 160.], [102., 102., 118., 125.]
+    boxes, conf, cls = merge_nested_lights([lamp, housing], [.6, .3], [3, 3])
+    np.testing.assert_allclose(boxes, [housing])
+    assert conf.tolist() == pytest.approx([.6]) and cls.tolist() == [3]
+
+
+@pytest.mark.parametrize("pair, confidences, expected", [
+    ((3, 1), (.9, .3), 1),  # any red stays red
+    ((1, 2), (.3, .9), 1),
+    ((2, 3), (.25, .5), 3),  # otherwise the more confident colour
+    ((3, 2), (.5, .25), 3),
+])
+def test_conflicting_nested_light_colours_resolve_like_the_signal_tracker(pair, confidences, expected):
+    boxes, _, cls = merge_nested_lights([[100., 100., 120., 160.], [102., 102., 118., 125.]],
+                                        confidences, pair)
+    assert len(boxes) == 1 and cls.tolist() == [expected]
+
+
+def test_light_merge_keeps_separate_heads_and_never_touches_other_classes():
+    left, right = [100., 100., 120., 160.], [115., 100., 135., 160.]  # 25% overlap: two heads
+    adult, child = [300., 300., 360., 450.], [310., 340., 350., 440.]  # child inside adult
+    sign = [302., 302., 318., 318.]
+    boxes, conf, cls = merge_nested_lights([left, right, adult, child, sign], [.5]*5, [1, 3, 4, 5, 6])
+    assert cls.tolist() == [1, 3, 4, 5, 6] and len(boxes) == 5
+    empty = merge_nested_lights(np.zeros((0, 4)), [], [])
+    assert all(len(x) == 0 for x in empty)
+    with pytest.raises(ValueError, match="same length"):
+        merge_nested_lights([left], [.5, .5], [1])
+
+
+def test_provider_sends_one_light_token_for_a_double_boxed_head():
+    p, b = measured_signal_scene((1, 1))
+    cx, fx = 639.5, 640.
+    u = cx+fx*2./20.
+    p.detector = make_provider((1, 1), boxes=[[u-6., 175., u+6., 195.], [u-5., 176., u+5., 186.]]).detector
+    out = p.predict(b)
+    assert out.driving["red_light"]
+    assert out.driving["red_light_distance_m"] == pytest.approx(15.-2.2, abs=1e-6)
+    assert out.signals.shape == (2, 16)  # stop line plus a single light, not two
 
 
 def test_provider_holds_red_at_route_stop_line_and_retires_it_after_passing():
