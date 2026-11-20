@@ -6,25 +6,11 @@ Detects vehicles, red, yellow and green traffic lights, adult and child pedestri
 
 ## Set up
 
-Python 3.12 was used. The model, example frames and statistics are already in this folder.
-
-macOS or Linux:
-
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -r ../requirements.txt
-.venv/bin/python demo.py --device mps
-```
-
-Windows:
-
-```bash
-py -3.12 -m venv .venv
-.venv\Scripts\pip install -r ..\requirements.txt
-.venv\Scripts\python demo.py --device cpu
-```
-
-Then open http://127.0.0.1:8773. Use `--device cpu` on any machine, `mps` on Apple silicon or `cuda` on an NVIDIA GPU. CUDA and Windows have not been tested, and CUDA may need the PyTorch build for your system from pytorch.org.
+Follow route 2 in the main README: from the repository root, create an
+environment and run `pip install -r requirements-perception.txt`, then
+`python perception/demo.py --device cpu`. Open http://127.0.0.1:8773. Use
+`--device mps` on Apple silicon or `--device cuda` on an NVIDIA GPU. The model,
+example frames and statistics are already in this folder.
 
 ## Use the model in your code
 

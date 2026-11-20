@@ -1,4 +1,4 @@
-# Joint road model — FINAL package (v2b), teammate share edition
+# Joint road model (final checkpoint, v2b)
 
 This is the final checkpoint. It was chosen on validation by a rule fixed in advance, and was then evaluated **once** on the reserved test set
 (200 images, 10 episodes that were never used for training or model selection).
@@ -12,9 +12,10 @@ One network does three jobs on a single 1280×720 front-camera frame (CARLA, cam
 **Start with `WORK_SUMMARY.md`.** It explains what was done in plain language and in technical detail.
 
 ## Test it (about 2 minutes)
-```bash
-pip install -r requirements.txt          # Python 3.10–3.12 recommended
+Install the vision environment from the repository root first (route 2 in the main
+README: `pip install -r requirements-perception.txt`), then from this folder:
 
+```bash
 python selftest.py                       # 1) verifies the package works on your machine
 python run_video.py sample_frames/episode_0014 --out demo_out   # 2) runs on a 20-frame drive and makes a video
 ```
@@ -122,5 +123,4 @@ These figures measure agreement with the team's supplied labels. 95% CIs come fr
 | `sample_frames/` | 6 frames (3 test-split, 3 validation-split) plus expected outputs for the self-test, and one 20-frame test episode (`episode_0014`) for the demo. JPEG copies of project frames |
 | `examples/` | Overlays and JSON produced by this package |
 | `metrics/` | Full validation and test metric files, including per-image records and bootstrap CIs |
-| `requirements.txt` | Validated with Python 3.12, torch 2.14, ultralytics 8.4.171/8.4.175, numpy 1.26, opencv 4.11 |
 | `SHA256SUMS` | Checksums of every file |

@@ -1,0 +1,9 @@
+# Vision models only: perception demo and joint road model demo, on macOS, Linux or Windows.
+# No CARLA, Dreamer or GPU needed. Python 3.10 to 3.12. The full system uses requirements.txt.
+torch==2.7.1
+torchvision==0.22.1
+numpy==1.26.4
+Pillow>=9
+opencv-python==4.11.0.86
+ultralytics==8.4.171
+Flask>=3,<4
