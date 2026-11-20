@@ -17,17 +17,17 @@ if errorlevel 1 goto failed
 where nvidia-smi >nul 2>&1
 if errorlevel 1 goto cpu
 echo NVIDIA GPU found: installing PyTorch with CUDA support.
-"%PY%" -m pip install torch==2.9.1 torchvision==0.24.1 --index-url https://download.pytorch.org/whl/cu128
+"%PY%" -m pip install torch==2.7.1 torchvision==0.22.1 --index-url https://download.pytorch.org/whl/cu126
 if errorlevel 1 goto failed
 goto rest
 
 :cpu
 echo No NVIDIA GPU found: installing CPU PyTorch. The model will run at only a few frames per second.
-"%PY%" -m pip install torch==2.9.1 torchvision==0.24.1 --index-url https://download.pytorch.org/whl/cpu
+"%PY%" -m pip install torch==2.7.1 torchvision==0.22.1 --index-url https://download.pytorch.org/whl/cpu
 if errorlevel 1 goto failed
 
 :rest
-"%PY%" -m pip install -r requirements_windows.txt
+"%PY%" -m pip install -r "..\requirements.txt"
 if errorlevel 1 goto failed
 "%PY%" -m pip install carla==%CARLA_VER%
 if errorlevel 1 goto nocarla

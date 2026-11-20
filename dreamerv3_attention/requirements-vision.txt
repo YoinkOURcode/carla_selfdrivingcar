@@ -1,6 +1,0 @@
--r requirements.txt
-numpy==1.26.4
-torchvision==0.22.1
-opencv-python==4.11.0.86
-ultralytics==8.4.174
-rapidocr_onnxruntime==1.2.3

@@ -87,5 +87,5 @@ graphify-out
 .agentflow/
 .codex/
 .claude/
-world_model_rl/train_from_scratch.sh
+world_model_rl
 
