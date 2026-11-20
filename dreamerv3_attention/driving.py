@@ -14,7 +14,10 @@ from typing import Dict, Optional, Tuple
 WAYPOINT_SPACING_M = 15.0
 MIN_EPISODE_RETURN = -500.0
 LANE_CENTER_TOLERANCE_M = 0.5
-SIGNAL_STOP_AREA_M = 2.5
+SIGNAL_STOP_AREA_M = 2.5  # evaluation: a stationary wait this close to a red stop line is accepted
+# The supervisor holds only inside this tighter area, so perception error in the stop
+# distance cannot leave the car just outside the accepted one (experiment_28: 2.524 m).
+SIGNAL_HOLD_AREA_M = 2.25
 ROUTE_LANE_FALLBACK_SPEED_MPS = 1.5
 
 
@@ -63,6 +66,10 @@ class DrivingState:
     observation_invalid_reason: Optional[str] = None
 
 
+# Absolute ceiling on the supervisor's speed target; config cannot raise it.
+HARD_SPEED_CAP_MPS = 65.0 / 3.6
+
+
 @dataclass
 class DrivingConfig:
     default_speed_mps: float = 30.0 / 3.6
@@ -90,6 +97,16 @@ class DrivingConfig:
     # Keep the pedestrian speed cap this long after the risk flag clears, so a
     # flag flickering at the edge of its window cannot launch and re-brake.
     pedestrian_risk_hold_s: float = 0.5
+    # A walker last seen this close ahead can vanish from the sensors (radar and camera
+    # lose it inside ~2.5 m; experiment_28 eval16) while still in the lane, so after a
+    # stop for it the car waits this long, not clear_dwell_s, before moving again.
+    # Absolute speed ceilings the moment a pedestrian (child) is sighted near the road, on
+    # top of the fractions above: a fraction of a 60 km/h target is still too fast to stop
+    # in the 10-15 m the camera gives (experiment_28 eval15-17). 0 disables.
+    pedestrian_max_speed_mps: float = 6.0
+    child_pedestrian_max_speed_mps: float = 3.0
+    pedestrian_close_m: float = 5.0
+    pedestrian_close_clear_dwell_s: float = 3.0
     vehicle_speed_factor: float = 0.8
     # Let the car creep away from a static obstacle (not a vehicle) that is at
     # least creep_min_gap_m ahead, instead of holding it stopped at the
@@ -143,7 +160,8 @@ def yellow_can_stop(state: DrivingState, config: DrivingConfig, dt_s: float = 0.
                         speed**2 / (2. * config.red_light_deceleration_mps2))
 
 
-def signal_wait(state: DrivingState, config: DrivingConfig = DrivingConfig()) -> bool:
+def signal_wait(state: DrivingState, config: DrivingConfig = DrivingConfig(),
+                area_m: float = SIGNAL_STOP_AREA_M) -> bool:
     """Accept a stationary signal stop at the line, crossing or connected queue."""
     if (not math.isfinite(state.speed_mps) or
             not 0.0 <= state.speed_mps < config.stop_speed_mps or
@@ -158,7 +176,7 @@ def signal_wait(state: DrivingState, config: DrivingConfig = DrivingConfig()) ->
                       state.vehicle_ahead and front is not None and
                       front <= config.following_min_gap_m + config.following_time_s * ROUTE_LANE_FALLBACK_SPEED_MPS)
     return bool(state.red_light_queue or fallback_queue or
-                (distance is not None and (distance <= SIGNAL_STOP_AREA_M or
+                (distance is not None and (distance <= area_m or
                  (crossing is not None and crossing <= 5.0 and
                   0.0 <= distance - crossing <= 15.0))))
 
@@ -183,7 +201,7 @@ def signal_stop_required(state: DrivingState, distance: Optional[float],
                          config: DrivingConfig, dt_s: float = 0.1) -> bool:
     """Reserve full brake for holding or an imminent stop-line crossing."""
     distance = _valid_nonnegative(distance)
-    if distance is None or signal_wait(state, config):
+    if distance is None or signal_wait(state, config, SIGNAL_HOLD_AREA_M):
         return True
     speed = max(0.0, state.speed_mps)
     deceleration = config.red_light_deceleration_mps2
@@ -197,7 +215,7 @@ def signal_stop_required(state: DrivingState, distance: Optional[float],
                           (2.0 * deceleration))
     # Full brake is only forced inside the stop area. Farther out, the
     # proportional speed-target feedback does the braking.
-    return distance <= min(SIGNAL_STOP_AREA_M, max(hold_distance, emergency_distance))
+    return distance <= min(SIGNAL_HOLD_AREA_M, max(hold_distance, emergency_distance))
 
 
 def compute_target_speed(state: DrivingState,
@@ -205,7 +223,7 @@ def compute_target_speed(state: DrivingState,
     """Return a conservative speed target, never above a trusted limit."""
     if not state.observations_valid or not math.isfinite(state.speed_mps):
         return 0.0
-    if signal_wait(state, config):
+    if signal_wait(state, config, SIGNAL_HOLD_AREA_M):
         return 0.0
     limit = state.speed_limit_mps
     trusted_limit = (limit if limit is not None and math.isfinite(limit)
@@ -213,6 +231,7 @@ def compute_target_speed(state: DrivingState,
                      config.min_speed_limit_confidence else None)
     target = (trusted_limit if trusted_limit is not None
               else config.default_speed_mps)
+    target = min(target, HARD_SPEED_CAP_MPS)
     if config.max_speed_mps > 0:
         target = min(target, config.max_speed_mps)
     base_speed = target
@@ -233,6 +252,10 @@ def compute_target_speed(state: DrivingState,
         1.0 - (1.0 - config.pedestrian_speed_factor) * pedestrian_risk,
         1.0 - (1.0 - config.child_pedestrian_speed_factor) * child_risk,
         config.vehicle_speed_factor if state.vehicle_ahead else 1.0)
+    if pedestrian_risk > 0 and config.pedestrian_max_speed_mps > 0:
+        target = min(target, config.pedestrian_max_speed_mps)
+    if child_risk > 0 and config.child_pedestrian_max_speed_mps > 0:
+        target = min(target, config.child_pedestrian_max_speed_mps)
     if state.front_hazard_m is not None:
         front = _valid_nonnegative(state.front_hazard_m)
         if front is not None:
@@ -286,12 +309,17 @@ class SafetySupervisor:
         self._restart_phase = "disabled" if not config.restart_assist_enabled else "idle"
         self._risk_hold_s = 0.0
         self._held_risk = (0.0, 0.0)
+        self._pedestrian_stop = False
+        self._pedestrian_close = False
+        self._pedestrian_clear_s = 0.0
         self._approach_stopped_s = 0.0
         self._approach_assist = False
 
     def reset(self) -> None:
         self._risk_hold_s = 0.0
         self._held_risk = (0.0, 0.0)
+        self._pedestrian_stop = self._pedestrian_close = False
+        self._pedestrian_clear_s = 0.0
         self._approach_stopped_s = 0.0
         self._approach_assist = False
         self.crossing_phase = "clear"
@@ -342,6 +370,22 @@ class SafetySupervisor:
             self._risk_hold_s -= dt
             state = replace(state, pedestrian_risk=self._held_risk[0],
                             child_pedestrian_risk=self._held_risk[1])
+        # A front-camera conflict drops out as the walker leaves the camera's path, and
+        # the car re-accelerated into a child at 12 m/s (experiment_28 eval7). Once
+        # triggered, stop fully and wait until the conflict has stayed clear.
+        if state.pedestrian_conflict:
+            self._pedestrian_stop, self._pedestrian_clear_s = True, 0.0
+            front = _valid_nonnegative(state.front_hazard_m)
+            self._pedestrian_close |= front is not None and front <= self.config.pedestrian_close_m
+        elif self._pedestrian_stop:
+            stopped = state.speed_mps <= self.config.stop_speed_mps
+            self._pedestrian_clear_s = self._pedestrian_clear_s + dt if stopped else 0.0
+            dwell = (max(self.config.clear_dwell_s, self.config.pedestrian_close_clear_dwell_s)
+                     if self._pedestrian_close else self.config.clear_dwell_s)
+            if self._pedestrian_clear_s >= dwell:
+                self._pedestrian_stop = self._pedestrian_close = False
+            else:
+                state = replace(state, pedestrian_conflict=True)
 
         # Side hazards constrain steering, but do not cause blind braking.
         if state.side_hazard_m is not None and 0 <= state.side_hazard_m < 3.0:
@@ -424,7 +468,8 @@ class SafetySupervisor:
             d = _valid_nonnegative(state.red_light_distance_m)
             self._red_stopping = signal_stop_required(target_state, d, self.config, dt)
             if self._red_stopping:
-                if signal_wait(target_state, self.config) or d is None or d <= self.config.crossing_buffer_m:
+                if (signal_wait(target_state, self.config, SIGNAL_HOLD_AREA_M) or d is None or
+                        d <= self.config.crossing_buffer_m):
                     target = 0.0
                 longitudinal = -1.0
                 reasons.append("red_light_stop")
@@ -448,7 +493,8 @@ class SafetySupervisor:
             d = _valid_nonnegative(state.yellow_light_distance_m)
             self._yellow_braking = signal_stop_required(target_state, d, self.config, dt)
             if self._yellow_braking:
-                if signal_wait(target_state, self.config) or d is None or d <= self.config.crossing_buffer_m:
+                if (signal_wait(target_state, self.config, SIGNAL_HOLD_AREA_M) or d is None or
+                        d <= self.config.crossing_buffer_m):
                     target = 0.0
                 longitudinal = -1.0
                 reasons.append("yellow_light_stop")

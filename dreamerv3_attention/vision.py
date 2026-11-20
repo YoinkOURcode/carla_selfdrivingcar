@@ -26,6 +26,16 @@ BUMPER_ALLOWANCE_M = 2.5  # same fixed ego-origin-to-bumper allowance as crossin
 # eval2 deadlocks: 1.3-1.8 m, 31 deg), narrow enough to reject a mis-projected route.
 ROUTE_LANE_FALLBACK_MAX_OFFSET_M = 2.0
 ROUTE_LANE_FALLBACK_MAX_HEADING_RAD = math.radians(40.)
+# On Town02's two-lane roads vision can lock onto the neighbouring lane's paint and
+# report an offset 3-6 m off (experiment_28 eval4/7/10, same spots every run). Correct
+# readings stay within 0.75 m (p95), and the route offset within 0.14 m (p99).
+VISION_LANE_MAX_DISAGREEMENT_M = 2.0
+# At bend entry the straight-line lane model locks onto the wrong paint and a hold carries
+# it on (Town02 88->61, 41->93: lane 0.6-1.0 m and heading sign wrong; held estimates in
+# sharp bends 98% wrong). Where the aligned route (planned path + odometry) disagrees by
+# more than this, it is the closer estimate on 96-100% of frames; fires on ~1% of straights.
+ROUTE_LANE_MAX_DISAGREEMENT_M = 0.5
+ROUTE_HEADING_MAX_DISAGREEMENT_RAD = 0.15
 
 
 def path_lane(path):
@@ -57,7 +67,7 @@ def _env_float(name, default, low, high):
 class VisionPerceptionProvider:
     camera_only = True
     uses_depth_camera = True
-    sign_reader = speed_limits = None
+    sign_reader = speed_limits = sign_debug = None
 
     def __init__(self):
         import torch
@@ -90,6 +100,7 @@ class VisionPerceptionProvider:
 
     def reset(self):
         self._last_lane = None
+        self.lane_debug = self.sign_debug = None
         if getattr(self, "signal_tracker", None) is not None:
             self.signal_tracker.reset()
         if getattr(self, "speed_limits", None) is not None:
@@ -180,6 +191,7 @@ class VisionPerceptionProvider:
             if getattr(self, 'signal_tracker', None) is not None:
                 held, signals = self._track(bundle, [], bundle.ego_path)
                 fields.update(held)
+            self.lane_debug = None
             return self._prediction(bundle, rows, fields, signals)
         depth_image = bundle.depth if bundle.valid.get("depth", bundle.depth is not None) else None
         if depth_image is not None and np.shape(depth_image) != bundle.rgb.shape[:2]:
@@ -203,21 +215,14 @@ class VisionPerceptionProvider:
         lane_age = float(bundle.timestamp) - last_lane[0] if last_lane is not None else None
         current_route = path_lane(bundle.ego_path) if bundle.ego_path is not None else None
         route_lane = current_route if bundle.near_junction else None
-        if route_lane is not None:
-            # Junctions have no ego-lane paint; vision estimates there are missing or
-            # wrong, so navigation (planned path + odometry) is the lane reference.
-            fields.update(lane_error_m=route_lane[0], heading_error_rad=route_lane[1],
-                          observations_valid=True, lane_source="route_junction")
-            self._last_lane = (float(bundle.timestamp), *route_lane, route_lane)
-        elif lane_geometry_valid and acceptable:
-            # Fit y=a*x+b in metres; image-space heading_deg is not physical yaw.
-            slope, intercept = np.polyfit(points[:, 0], points[:, 1], 1)
-            fields.update(lane_error_m=float(-intercept / math.hypot(1., slope)),
-                          heading_error_rad=float(-math.atan(slope)), observations_valid=True,
-                          lane_source="vision")
-            self._last_lane = (float(bundle.timestamp), fields["lane_error_m"],
-                               fields["heading_error_rad"], current_route)
-        elif lane_hold_s > 0. and lane_age is not None and 0. <= lane_age <= lane_hold_s:
+        # Navigation starts this path at the ego's projected route position.
+        # Check distance to that point as well as alignment with the path.
+        aligned_route = current_route if (
+            current_route is not None and
+            math.hypot(*bundle.ego_path[0]) <= ROUTE_LANE_FALLBACK_MAX_OFFSET_M and
+            abs(current_route[1]) <= ROUTE_LANE_FALLBACK_MAX_HEADING_RAD) else None
+        held = None
+        if lane_hold_s > 0. and lane_age is not None and 0. <= lane_age <= lane_hold_s:
             # Bridge dash gaps and short unpainted stretches with the last valid estimate.
             # Move it with the ego's motion relative to the route: a frozen value kept the
             # policy correcting for 2 s and drove it up to 2.3 m across the lane.
@@ -227,22 +232,55 @@ class VisionPerceptionProvider:
             if seed_route is not None and current_route is not None:
                 error += current_route[0] - seed_route[0]
                 heading += current_route[1] - seed_route[1]
-            fields.update(lane_error_m=error, heading_error_rad=heading,
+            held = (error, heading)
+        vision_lane = fitted_lane = None
+        if lane_geometry_valid and acceptable:
+            # Fit y=a*x+b in metres; image-space heading_deg is not physical yaw.
+            slope, intercept = np.polyfit(points[:, 0], points[:, 1], 1)
+            vision_lane = (float(-intercept / math.hypot(1., slope)), float(-math.atan(slope)))
+            fitted_lane = vision_lane
+            # A neighbouring-lane reading is far from the route offset, or from the held
+            # estimate when there is no aligned route. The route is the reference when it
+            # exists: a hold seeded by a wrong reading would accept the next wrong one.
+            reference = aligned_route if aligned_route is not None else held
+            if reference is not None and abs(vision_lane[0] - reference[0]) > VISION_LANE_MAX_DISAGREEMENT_M:
+                vision_lane = None
+        estimate = vision_lane if vision_lane is not None else held
+        if route_lane is not None:
+            # Junctions have no ego-lane paint; vision estimates there are missing or
+            # wrong, so navigation (planned path + odometry) is the lane reference.
+            fields.update(lane_error_m=route_lane[0], heading_error_rad=route_lane[1],
+                          observations_valid=True, lane_source="route_junction")
+            self._last_lane = (float(bundle.timestamp), *route_lane, route_lane)
+        elif estimate is not None and aligned_route is not None and (
+                abs(estimate[0] - aligned_route[0]) > ROUTE_LANE_MAX_DISAGREEMENT_M or
+                abs(estimate[1] - aligned_route[1]) > ROUTE_HEADING_MAX_DISAGREEMENT_RAD):
+            fields.update(lane_error_m=aligned_route[0], heading_error_rad=aligned_route[1],
+                          observations_valid=True, lane_source="route_aligned")
+            self._last_lane = (float(bundle.timestamp), *aligned_route, aligned_route)
+        elif vision_lane is not None:
+            fields.update(lane_error_m=vision_lane[0], heading_error_rad=vision_lane[1],
+                          observations_valid=True, lane_source="vision")
+            self._last_lane = (float(bundle.timestamp), *vision_lane, current_route)
+        elif held is not None:
+            fields.update(lane_error_m=held[0], heading_error_rad=held[1],
                           observations_valid=True, lane_source="held")
         else:
             # No estimate yet (e.g. at spawn) has nothing to hold, so the route may stand in at once.
-            route_lane = current_route if lane_age is None or lane_age > lane_hold_s else None
-            # Navigation starts this path at the ego's projected route position.
-            # Check distance to that point as well as alignment with the path.
-            if (route_lane is not None and
-                    math.hypot(*bundle.ego_path[0]) <= ROUTE_LANE_FALLBACK_MAX_OFFSET_M and
-                    abs(route_lane[1]) <= ROUTE_LANE_FALLBACK_MAX_HEADING_RAD):
+            route_lane = aligned_route if lane_age is None or lane_age > lane_hold_s else None
+            if route_lane is not None:
                 fields.update(lane_error_m=route_lane[0], heading_error_rad=route_lane[1],
                               observations_valid=True, lane_source="route_fallback")
             elif not lane_geometry_valid:
                 fields["observation_invalid_reason"] = "lane_geometry_unavailable"
             else:
                 fields["observation_invalid_reason"] = "lane_low_confidence"
+        # Evidence behind the lane estimate, written to evaluation traces for diagnosis only.
+        self.lane_debug = dict(
+            source=fields["lane_source"], points_ego_m=np.round(points[:, :2], 3).tolist() if len(points) else [],
+            extrapolated_fraction=None if extrapolated is None else float(extrapolated), accepted=bool(acceptable), lane_age_s=lane_age,
+            fit=fitted_lane, held=held, route=current_route, aligned_route=aligned_route,
+            near_junction=bool(bundle.near_junction))
         boxes = detections.xyxy.cpu().numpy().reshape(-1, 4)
         confidences = detections.conf.cpu().numpy()
         classes = detections.cls.cpu().numpy().astype(int)
@@ -319,17 +357,31 @@ class VisionPerceptionProvider:
             point = self.depth_point((box[0]+box[2])/2., (box[1]+box[3])/2., float(depth), calibration)
             if point is not None and point[1] >= -1. and (nearest is None or point[0] < nearest[1][0]):
                 nearest = (box, point)
-        value, read = None, False
+        value, score, read, reason = None, 0.0, False, "no_sign" if not signs else "no_depth_or_side"
         reader = getattr(self, "sign_reader", None)
-        if nearest is not None and reader is not None and tracker.should_read(timestamp):
+        if nearest is not None:
             x1, y1, x2, y2 = nearest[0]
-            if y2 - y1 >= SIGN_MIN_HEIGHT_PX:
+            if reader is None:
+                reason = "no_reader"
+            elif y2 - y1 < SIGN_MIN_HEIGHT_PX:
+                reason = "too_small"
+            elif not tracker.should_read(timestamp):
+                reason = "interval"
+            else:
                 crop = bgr[max(0, int(y1)):int(y2), max(0, int(x1)):int(x2)]
                 if crop.size:
-                    value, _ = read_speed_limit(reader, crop)
-                    read = True
+                    value, score = read_speed_limit(reader, crop)
+                    read, reason = True, "read" if value is not None else "ocr_failed"
+                else:
+                    reason = "empty_crop"
         distance = None if nearest is None else float(np.linalg.norm(nearest[1][:2]))
         limit_kmh, confidence = tracker.update(timestamp, distance, value, read)
+        # Per-frame record for the evaluation trace: why a sign was or was not read.
+        self.sign_debug = dict(
+            detected=len(signs), distance_m=distance,
+            height_px=None if nearest is None else float(nearest[0][3] - nearest[0][1]),
+            reason=reason, ocr_value=value, ocr_score=score, votes=dict(tracker.votes),
+            limit_kmh=limit_kmh)
         if limit_kmh is not None:
             fields.update(speed_limit_mps=limit_kmh / 3.6, speed_limit_confidence=float(confidence))
 

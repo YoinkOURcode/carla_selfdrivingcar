@@ -157,6 +157,20 @@ def test_simulator_visibility_reaches_state_and_observation_with_hard_cap(
     assert obs["tokens"][0, 9] == pytest.approx(expected/100.)
 
 
+@pytest.mark.parametrize("mode", ["ground_truth", "external", "mixed"])
+def test_simulator_rain_wetness_night_reach_state_in_every_perception_mode(mode):
+    prediction = (PerceptionPrediction(np.zeros((0, 16), np.float32), driving=safe_external_fields(),
+                                       frame=42, timestamp=2.1) if mode != "ground_truth" else None)
+    env, _ = fake_environment(mode, prediction)
+    if mode == "external":
+        env.provider.camera_only = True
+    env.world.get_weather = lambda: NS(precipitation=80., wetness=70., sun_altitude_angle=-20.,
+                                       fog_density=0.)
+    state, obs = env._observe(42)
+    assert (state.rain, state.wetness, state.night) == pytest.approx((0.8, 0.7, 1.0))
+    assert obs["tokens"][0, 6:9] == pytest.approx([0.8, 0.7, 1.0])
+
+
 def test_physical_offroad_uses_unprojected_driving_lane_query():
     env, _ = fake_environment(offroad=True)
     state, _ = env._observe(42)
@@ -1353,7 +1367,7 @@ def test_provider_gets_odometry_path_bumper_and_signal_rows_are_not_hazards():
     state, obs = env._observe(42)
     assert seen[0].ego_pose == pytest.approx((0., 0., 0., 0.))
     assert seen[0].front_bumper_m == pytest.approx(2.)
-    np.testing.assert_allclose(seen[0].ego_path[:3], [[0., 0.], [5., 0.], [10., 0.]], atol=1e-6)
+    np.testing.assert_allclose(seen[0].ego_path[:3], [[0., 0.], [1., 0.], [5., 0.]], atol=1e-6)
     np.testing.assert_allclose(obs["tokens"][4:6], signals)
     assert obs["mask"][4:6].all()
     assert state.front_hazard_m is None and not state.pedestrian_conflict
@@ -1396,3 +1410,23 @@ def test_provider_gets_near_junction_flag():
     env.provider.predict = lambda inputs: seen.append(inputs) or prediction
     env._observe(42)
     assert seen[0].near_junction
+
+
+def test_provider_path_heading_is_the_route_tangent_in_a_sharp_bend():
+    # Regression (town_transfer E04, Town02 41->93 at ~426 m): the planned path started
+    # with a 5 m chord, so in a ~53 deg / 10 m bend the route heading was off by ~0.25 rad
+    # and the actor cut the corner into a collision.
+    from dreamerv3_attention.navigation import Route
+    from dreamerv3_attention.vision import path_lane
+    prediction = PerceptionPrediction(np.zeros((0, 16), np.float32), driving=safe_external_fields(),
+                                      frame=42, timestamp=2.1)
+    env, _ = fake_environment("external", prediction)
+    radius, s = 10., np.arange(0., 40., 2.)
+    env.route = Route(np.column_stack([radius*np.sin(s/radius), radius*(1.-np.cos(s/radius))]))
+    seen = []
+    env.provider.predict = lambda inputs: seen.append(inputs) or prediction
+    env._observe(42)
+    lane, heading = path_lane(seen[0].ego_path)
+    _, _, route_heading = Route(env.route.points).project((0., 0.))
+    simulator_heading = -route_heading  # ego yaw 0: the environment's heading_error_rad
+    assert abs(lane) < 1e-6 and heading == pytest.approx(simulator_heading, abs=.02)

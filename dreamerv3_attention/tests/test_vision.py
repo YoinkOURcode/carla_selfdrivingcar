@@ -1,3 +1,4 @@
+import json
 """Camera geometry, frozen-model adapter contract, and missing-data behavior."""
 
 import math
@@ -10,7 +11,7 @@ import torch
 from dreamerv3_attention.driving import DrivingConfig, DrivingState, SafetySupervisor
 from dreamerv3_attention.observations import FrameBundle
 from dreamerv3_attention.sensors import SensorFrameBuffer
-from dreamerv3_attention.vision import VisionPerceptionProvider
+from dreamerv3_attention.vision import VisionPerceptionProvider, path_lane
 
 
 def calibration():
@@ -287,14 +288,14 @@ def test_speed_limit_applies_after_confirmed_sign_is_passed(monkeypatch):
     monkeypatch.setattr(vision, "read_speed_limit", lambda reader, crop: (40, .9))
     p = make_provider((6,), boxes=[light_box(3., 10.)])
     p.sign_reader, p.speed_limits = object(), SpeedLimitTracker()
-    for t in (0., .1, .2):
+    for t in (0., .15, .3, .45, .6, .75):  # a first limit needs the stricter raise vote count
         b = depth_bundle(10.)
         b.timestamp = t
         assert p.predict(b).driving["speed_limit_mps"] is None  # confirmed, not yet passed
     p.detector = NS(predict=lambda *a, **kw: [NS(boxes=NS(xyxy=torch.zeros((0, 4)), conf=torch.zeros(0),
                                                         cls=torch.zeros(0, dtype=torch.long)))])
     b = depth_bundle(10.)
-    b.timestamp = .6
+    b.timestamp = 1.2
     fields = p.predict(b).driving
     assert fields["speed_limit_mps"] == pytest.approx(40/3.6)
     assert fields["speed_limit_confidence"] == pytest.approx(1.)
@@ -316,6 +317,23 @@ def test_speed_limit_tracker_needs_votes_and_a_close_pass():
     for t, value in ((0., 30), (.1, 30), (.2, 30), (.3, 60), (.4, 60)):
         tracker.update(t, 12., value, True)
     assert tracker.update(.8, None) == (None, 0.)  # 3 against 2 is not a clear majority
+
+
+def test_speed_limit_raise_needs_more_votes_than_a_reduction():
+    # Regression (experiment_28): a 60 confirmed from three reads in a 30 zone.
+    from dreamerv3_attention.speed_sign import SIGN_MIN_VOTES, SIGN_RAISE_MIN_VOTES, SpeedLimitTracker
+
+    def pass_sign(tracker, start, value, reads):
+        for i in range(reads):
+            tracker.update(start + .1*i, 12., value, True)
+        return tracker.update(start + .1*reads + .4, None)
+
+    tracker = SpeedLimitTracker()
+    assert pass_sign(tracker, 0., 30, SIGN_RAISE_MIN_VOTES - 1) == (None, 0.)  # first limit: raise rule
+    assert pass_sign(tracker, 2., 30, SIGN_RAISE_MIN_VOTES)[0] == 30
+    assert pass_sign(tracker, 4., 60, SIGN_RAISE_MIN_VOTES - 1)[0] == 30  # raise ignored
+    assert pass_sign(tracker, 6., 60, SIGN_RAISE_MIN_VOTES)[0] == 60
+    assert pass_sign(tracker, 8., 30, SIGN_MIN_VOTES)[0] == 30  # reductions stay quick
 
 
 def test_speed_limit_parser_ignores_non_ascii_digit_glyphs():
@@ -346,7 +364,11 @@ def test_near_junction_lane_comes_from_planned_path_not_vision(low_confidence):
     assert fields["lane_error_m"] == pytest.approx(-.4)  # vision alone would report +0.7
     b.near_junction = False
     fields = make_provider().predict(b).driving
-    assert fields["lane_error_m"] == pytest.approx(.7)
+    # Outside junctions a 1.1 m disagreement with the aligned route is a wrong line.
+    assert fields["lane_source"] == "route_aligned" and fields["lane_error_m"] == pytest.approx(-.4)
+    b.ego_path = np.array([[0., -.5], [10., -.5]])  # route agrees with vision within 0.5 m
+    fields = make_provider().predict(b).driving
+    assert fields["lane_source"] == "vision" and fields["lane_error_m"] == pytest.approx(.7)
 
 
 def test_route_lane_seeds_hold_after_junction_exit():
@@ -394,6 +416,12 @@ def test_expired_lane_recovers_at_queue_speed_after_red_clears():
     assert overspeed.action[1] < 0.
 
     provider.road = vision_road
+    camera.timestamp += .05
+    fields = provider.predict(camera).driving
+    # Vision (centred) is 0.8 m from the aligned route here, so the route is used; neither is capped.
+    assert fields["lane_source"] == "route_aligned"
+    assert supervisor.step(DrivingState(**fields), (0., 1.), .05).target_speed_mps > 1.5
+    camera.ego_path = np.array([[0., 0.], [40., 0.]])
     camera.timestamp += .05
     fields = provider.predict(camera).driving
     assert fields["lane_source"] == "vision"
@@ -466,6 +494,58 @@ def test_expired_lane_recovers_a_drifted_car_instead_of_braking_forever():
     assert fields["heading_error_rad"] == pytest.approx(angle)
 
 
+def lane_road(lane_error):
+    """Road model whose straight centre line puts the ego `lane_error` metres off it."""
+    center_line = [[639.5-640.*lane_error/(x-1.5), 359.5+640.*2.4/(x-1.5)] for x in (6., 10., 20.)]
+    return lambda _: dict(lane_center=dict(center_line=center_line, low_confidence=False), crosswalks=[])
+
+
+def test_vision_lane_far_from_route_is_rejected_until_it_agrees_again():
+    # Regression (experiment_28 eval10 ep2): vision locked onto the neighbouring lane
+    # (+3.7 m vs true -0.4 m), the policy steered toward it and left the road.
+    provider, camera = make_provider(), bundle()
+    provider.lane_hold_s = 2.
+    camera.ego_path = np.array([[0., -.5], [20., -.5]])  # route: ego 0.5 m off centre
+    assert provider.predict(camera).driving["lane_source"] == "vision"
+    provider.road = lane_road(4.2)  # one lane width off
+    camera.timestamp += .05
+    fields = provider.predict(camera).driving
+    assert fields["lane_source"] == "held" and fields["lane_error_m"] == pytest.approx(.7)
+    camera.timestamp += 2.05  # still wrong after the hold: navigation stands in
+    fields = provider.predict(camera).driving
+    assert fields["lane_source"] == "route_fallback" and fields["lane_error_m"] == pytest.approx(.5)
+    provider.road = lane_road(.9)
+    camera.timestamp += .05
+    fields = provider.predict(camera).driving
+    assert fields["lane_source"] == "vision" and fields["lane_error_m"] == pytest.approx(.9)
+
+
+def test_vision_lane_jump_without_route_falls_back_to_hold():
+    provider, camera = make_provider(), bundle()
+    provider.lane_hold_s = 2.
+    provider.predict(camera)
+    provider.road = lane_road(-3.)
+    camera.timestamp += .05
+    fields = provider.predict(camera).driving
+    assert fields["lane_source"] == "held" and fields["lane_error_m"] == pytest.approx(.7)
+    provider.road = lane_road(1.5)  # an ordinary correction is accepted
+    camera.timestamp += .05
+    assert provider.predict(camera).driving["lane_error_m"] == pytest.approx(1.5)
+
+
+def test_route_not_a_wrong_hold_decides_whether_vision_is_plausible():
+    # A hold seeded by a wrong reading must not reject the correct one that follows.
+    provider, camera = make_provider(), bundle()
+    provider.lane_hold_s = 2.
+    provider.road = lane_road(4.2)
+    provider.predict(camera)  # no route yet: nothing to check against
+    provider.road = lane_road(.7)
+    camera.timestamp += .05
+    camera.ego_path = np.array([[0., -.6], [20., -.6]])
+    fields = provider.predict(camera).driving
+    assert fields["lane_source"] == "vision" and fields["lane_error_m"] == pytest.approx(.7)
+
+
 def test_route_fallback_preserves_other_invalid_observation_checks():
     provider, camera = make_provider(), bundle()
     provider.lane_hold_s = 2.
@@ -483,3 +563,97 @@ def test_route_fallback_preserves_other_invalid_observation_checks():
     fields = provider.predict(camera).driving
     assert not fields["observations_valid"] and fields["lane_source"] == "unavailable"
     assert fields["observation_invalid_reason"] == "rgb_unavailable"
+
+
+def test_lane_debug_records_fit_points_and_hold():
+    provider, camera = make_provider(), bundle()
+    provider.lane_hold_s = 2.
+    camera.ego_path = np.array([[0., -.5], [20., -.5]])
+    provider.predict(camera)
+    debug = provider.lane_debug
+    assert debug["source"] == "vision" and debug["fit"][0] == pytest.approx(.7)
+    assert len(debug["points_ego_m"]) == 3 and debug["route"][0] == pytest.approx(.5)
+    provider.road = lane_road(4.2)  # rejected neighbouring lane: raw fit kept, hold used
+    camera.timestamp += .05
+    provider.predict(camera)
+    debug = provider.lane_debug
+    assert debug["source"] == "held" and debug["fit"][0] == pytest.approx(4.2)
+    assert debug["lane_age_s"] == pytest.approx(.05) and debug["held"][0] == pytest.approx(.7)
+    json.dumps(debug, allow_nan=False)
+
+
+def road_from_points(points):
+    """Road model whose projected centre line is exactly these ego-frame (x, y) points."""
+    center_line = [[639.5+640.*y/(x-1.5), 359.5+640.*2.4/(x-1.5)] for x, y in points]
+    return lambda _: dict(lane_center=dict(center_line=center_line, low_confidence=False), crosswalks=[])
+
+
+def test_aligned_route_replaces_wrong_vision_line_at_bend_entry():
+    # Regression (town_transfer E01, Town02 88->61 frame 378053, left bend entry): the
+    # captured centre line leans right (heading -0.27) while the planned path turns left
+    # (+0.68); the actor followed vision and collided at 249.9 m.
+    captured = [[9.161, 2.587], [8.195, 2.32], [7.446, 2.112], [6.848, 1.947], [6.359, 1.811], [5.773, 1.649]]
+    provider, camera = make_provider(), bundle()
+    provider.lane_hold_s = 2.
+    provider.road = road_from_points(captured)
+    heading = .68
+    camera.ego_path = np.array([[0., -.37], [20.*math.cos(heading), -.37-20.*math.sin(heading)]])
+    route = path_lane(camera.ego_path)
+    fields = provider.predict(camera).driving
+    assert provider.lane_debug["fit"][1] == pytest.approx(-.27, abs=.01)
+    assert fields["lane_source"] == "route_aligned" and fields["observations_valid"]
+    assert (fields["lane_error_m"], fields["heading_error_rad"]) == pytest.approx(route)
+    # A wrong hold is replaced too: vision lost, the hold would carry the stale line.
+    provider._last_lane = (camera.timestamp, -.86, .13, route)
+    provider.road = lambda _: dict(lane_center=dict(center_line=[], low_confidence=True), crosswalks=[])
+    camera.timestamp += .05
+    fields = provider.predict(camera).driving
+    assert provider.lane_debug["held"] is not None
+    assert fields["lane_source"] == "route_aligned"
+
+
+def test_vision_agreeing_with_route_is_kept():
+    # Straight before the captured jump (frame 377997): small offsets stay with vision.
+    provider, camera = make_provider(), bundle()
+    provider.road = lane_road(.3)
+    camera.ego_path = np.array([[0., 0.], [20., 0.]])
+    fields = provider.predict(camera).driving
+    assert fields["lane_source"] == "vision" and fields["lane_error_m"] == pytest.approx(.3)
+    provider.road = lane_road(.98)  # captured 0.98 m jump against a centred route
+    camera.timestamp += .05
+    fields = provider.predict(camera).driving
+    assert fields["lane_source"] == "route_aligned" and fields["lane_error_m"] == pytest.approx(0., abs=1e-9)
+
+
+@pytest.mark.parametrize("speed, spacing", [(22., 15.5), (22., 22.), (6., 15.5), (6., 22.)])
+def test_back_to_back_signs_are_each_applied(speed, spacing):
+    """Signs closer together than their view range never leave the view (eval12 mixed_3)."""
+    from dreamerv3_attention.speed_sign import SpeedLimitTracker
+    tracker = SpeedLimitTracker()
+    tracker.limit_kmh, tracker.confidence = 90, 1.
+    signs, x, t, seen = [(0., 60), (spacing, 30)], -30., 0., []
+    while x < spacing + 25.:
+        visible = [(pos - x, value) for pos, value in signs if 3. <= pos - x <= 25.]
+        near = min(visible) if visible else None
+        read = near is not None and tracker.should_read(t)
+        limit = tracker.update(t, near[0] if near else None, near[1] if read else None, read)[0]
+        if not seen or seen[-1] != limit:
+            seen.append(limit)
+        x, t = x + speed * .05, t + .05
+    tracker.update(t + .5, None)
+    assert seen[:2] == [90, 60] and tracker.limit_kmh == 30
+
+
+def test_sign_debug_reports_why_a_sign_was_not_read(monkeypatch):
+    from dreamerv3_attention import vision
+    from dreamerv3_attention.speed_sign import SpeedLimitTracker
+    monkeypatch.setattr(vision, "read_speed_limit", lambda reader, crop: (None, 0.))
+    p = make_provider((6,), boxes=[light_box(3., 10.)])
+    p.sign_reader, p.speed_limits = object(), SpeedLimitTracker()
+    b = depth_bundle(10.)
+    b.timestamp = 0.
+    p.predict(b)
+    debug = p.sign_debug
+    assert debug["detected"] == 1 and debug["reason"] == "ocr_failed" and debug["ocr_value"] is None
+    assert 8. < debug["distance_m"] < 15. and debug["limit_kmh"] is None
+    json.dumps(debug, allow_nan=False)

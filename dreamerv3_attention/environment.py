@@ -38,6 +38,7 @@ LAMP_VIEW_SETBACK_M = 2.0
 # Town01 lane paint stops being usable about 9.4 m before a junction, so the
 # navigation lane reference starts this far before the first junction point.
 JUNCTION_APPROACH_M = 15.0
+MIN_SPEED_SIGN_START_M = 5.0  # a sign closer than this to the spawn cannot be read while approaching
 ROUTE_POINT_SPACING_M = 2.0  # GlobalRoutePlanner sampling; bridges points inside a junction
 
 
@@ -270,7 +271,8 @@ class CarlaEnv:
                 self.cfg.seed, self.scenario.get("seed", self.cfg.seed)]))
             count = len(spawns)
             # Nearly straight signal routes are rare among arbitrary endpoints.
-            candidate_limit = 2048 if self.scenario.get("requires_traffic_light") else 128
+            candidate_limit = (2048 if self.scenario.get("requires_traffic_light") or
+                               self.scenario.get("min_speed_sign_kmh") is not None else 128)
             candidates = rng.permutation(count * (count - 1))[:candidate_limit]
             pool = []
             starts = set()
@@ -356,6 +358,18 @@ class CarlaEnv:
                     limits.add(landmark.value)
             if len(limits) < 2:
                 raise _UnsupportedRoute("Unsupported scenario: selected route has no annotated speed-limit transition")
+        min_sign = self.scenario.get("min_speed_sign_kmh")
+        if min_sign is not None:
+            # Needs a sign the camera reader accepts (right-hand side) early enough to be read
+            # while approaching, leaving the rest of the route in that zone.
+            fast = False
+            for landmark in self.map.get_all_landmarks_of_type("274"):
+                position, offset, _ = route.project(
+                    (landmark.transform.location.x, landmark.transform.location.y), local=False)
+                fast |= (landmark.value >= min_sign and -1. <= offset < 6. and
+                         MIN_SPEED_SIGN_START_M <= position <= route.length / 2.)
+            if not fast:
+                raise _UnsupportedRoute("Unsupported scenario: selected route has no early speed-limit sign at or above the minimum")
         category = self.scenario.get("category", "straight")
         headings = np.unwrap(np.arctan2(route.delta[:, 1], route.delta[:, 0]))
         if ("max_heading_change_rad" in self.scenario and
@@ -1031,7 +1045,10 @@ class CarlaEnv:
                    np.zeros((0, 16), np.float32))
         if self.provider:
             # Navigation and ego odometry are available independently of scene truth.
-            stations = np.minimum(progress + np.array([0., 5., 10., 15., 20., 30., 45., 60., 80.]), self.route.length)
+            # The 1 m point keeps the first segment on the route segment at the ego, so path
+            # headings are the local tangent; a 5 m chord was off by ~0.2 rad in sharp bends.
+            stations = np.minimum(progress + np.array([0., 1., 5., 10., 15., 20., 30., 45., 60., 80.]),
+                                  self.route.length)
             planned = np.column_stack([np.interp(stations, self.route.cumulative, self.route.points[:, axis])
                                        for axis in (0, 1)])
             path_ego = np.asarray([ego_coordinates(transform, self.carla.Location(
@@ -1089,8 +1106,12 @@ class CarlaEnv:
             if forbidden & fields.keys():
                 raise ValueError("External providers may replace perception fields only")
             state = replace(state, **fields)
-            # Simulator fog supplies visibility in every perception mode.
+            # Simulator weather (fog, rain, wet road, night) is supplied in every perception mode,
+            # so the supervisor's weather speed caps apply with vision-based perception too.
             state.visibility_m = visibility_m
+            state.rain = weather.precipitation/100.
+            state.wetness = weather.wetness/100.
+            state.night = float(weather.sun_altitude_angle < 0)
             confidence = state.yellow_light_confidence
             distance = state.yellow_light_distance_m
             yellow_valid = (isinstance(state.yellow_light, (bool, np.bool_)) and
@@ -1291,6 +1312,9 @@ class CarlaEnv:
                 "external_fields": self.cfg.mixed_fields if self.cfg.perception == "mixed" else self.cfg.perception,
                 "sensor_valid": dict(self.last_bundle.valid),
                 "route_length_m": self.route.length, **asdict(oracle)}
+        sign_debug = getattr(getattr(self, "provider", None), "sign_debug", None)
+        if sign_debug is not None:
+            info["sign_debug"] = sign_debug
         if self.cfg.actor_longitudinal_bc_weight:
             # Labels describe the next policy state, aligned with RSSM's
             # reconstructed posterior. Oracle-only fields never enter them.

@@ -5,8 +5,8 @@ from dataclasses import replace
 
 import numpy as np
 
-from .driving import (DrivingConfig, DrivingState, compute_target_speed, signal_stop_required,
-                      signal_target_speed, signal_wait, yellow_can_stop)
+from .driving import (SIGNAL_HOLD_AREA_M, DrivingConfig, DrivingState, compute_target_speed,
+                      signal_stop_required, signal_target_speed, signal_wait, yellow_can_stop)
 
 
 class RouteController:
@@ -80,6 +80,6 @@ class RouteController:
             target = min(target, max(2., speed * .8), yellow_limit)
         if self.target_speed is not None:
             target = min(target, self.target_speed)
-        longitudinal = (-1. if yellow_braking or signal_wait(state, self.config) else
+        longitudinal = (-1. if yellow_braking or signal_wait(state, self.config, SIGNAL_HOLD_AREA_M) else
                         np.clip(0.5 * (target - speed), -1., 1.))
         return np.asarray([steer, longitudinal], dtype=np.float32), {"yellow_stop": yellow_stop, "yellow_braking": yellow_braking}

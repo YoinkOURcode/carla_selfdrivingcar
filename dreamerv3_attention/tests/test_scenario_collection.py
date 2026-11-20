@@ -228,6 +228,9 @@ def test_route_pool_does_not_suppress_simulator_errors(monkeypatch):
     ({"requires_crosswalk": True}, [(0, 20), (100, 20)], False),
     ({"requires_speed_limit_transition": True}, [(0, 0), (100, 0)], True),
     ({"requires_speed_limit_transition": True}, [(0, 20), (100, 20)], False),
+    ({"min_speed_sign_kmh": 50}, [(0, 0), (100, 0)], False),  # 50 sign is at the far end, 30 sign too slow
+    ({"min_speed_sign_kmh": 50}, [(0, 0), (150, 0)], True),   # 50 sign now in the first half
+    ({"min_speed_sign_kmh": 50}, [(0, 3), (150, 3)], False),  # sign on the left of the route
 ])
 def test_varied_routes_retain_scenario_capability_checks(monkeypatch, scenario, points, valid):
     env, _ = varied_route_env(monkeypatch)

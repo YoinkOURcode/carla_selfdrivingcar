@@ -16,8 +16,12 @@ VALID_LIMITS = {10, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130}  # CARLA sig
 SIGN_MIN_HEIGHT_PX = 12      # smaller signs are not read at all
 SIGN_READ_INTERVAL_S = 0.1   # read the visible sign at most this often (simulation time)
 SIGN_MIN_VOTES = 3           # a value must be read this often, and at least twice as often as any other
+# Raising the limit (or setting the first one) needs more reads: a false raise means
+# speeding, a missed raise only means driving slower (experiment_28: 60 read in 30 zones).
+SIGN_RAISE_MIN_VOTES = 6
 SIGN_PASS_DISTANCE_M = 15.0  # a confirmed sign last seen this close, then out of view, counts as passed
 SIGN_PASS_GAP_S = 0.3        # out of view this long counts as left the view
+SIGN_NEW_SIGN_JUMP_M = 3.0   # nearest-sign distance rising this much means the previous sign was passed
 SIGN_FORGET_S = 1.5          # an unconfirmed or far sign out of view this long is forgotten
 
 
@@ -119,24 +123,43 @@ class SpeedLimitTracker:
 
     def reset(self):
         self.limit_kmh, self.confidence = None, 0.0
-        self.votes, self.last_seen_t, self.last_distance_m, self.last_read_t = {}, None, None, None
+        self._clear()
 
     def confirmed(self):
         if not self.votes:
             return None, 0.0
         ranked = sorted(self.votes.values(), reverse=True)
         top, second = ranked[0], (ranked[1] if len(ranked) > 1 else 0)
-        if top < SIGN_MIN_VOTES or top < 2 * second:
-            return None, 0.0
         value = max(self.votes, key=self.votes.get)
+        raising = self.limit_kmh is None or value > self.limit_kmh
+        if top < (SIGN_RAISE_MIN_VOTES if raising else SIGN_MIN_VOTES) or top < 2 * second:
+            return None, 0.0
         return value, top / sum(self.votes.values())
 
     def should_read(self, timestamp):
         return self.last_read_t is None or timestamp - self.last_read_t >= SIGN_READ_INTERVAL_S
 
+    def _passed(self):
+        """True (and the limit applied) if the votes are confirmed and the sign was last seen close by."""
+        value, share = self.confirmed()
+        if value is None or self.last_distance_m is None or self.last_distance_m > SIGN_PASS_DISTANCE_M:
+            return False
+        self.limit_kmh, self.confidence = value, share
+        return True
+
+    def _clear(self):
+        self.votes, self.last_seen_t, self.last_distance_m, self.last_read_t = {}, None, None, None
+
     def update(self, timestamp, sign_distance_m=None, value=None, read=False):
         """One frame: distance of the nearest visible sign (None if none) and its reading, if read."""
         if sign_distance_m is not None:
+            # Signs only get closer while approached. A jump outward means the nearest sign is a
+            # different one, so the previous sign was passed even though a sign stayed in view
+            # (signs 15-25 m apart never leave the view and their votes would mix).
+            if (self.last_distance_m is not None and
+                    sign_distance_m > self.last_distance_m + SIGN_NEW_SIGN_JUMP_M):
+                self._passed()
+                self._clear()
             self.last_seen_t, self.last_distance_m = timestamp, sign_distance_m
             if read:
                 self.last_read_t = timestamp
@@ -144,11 +167,8 @@ class SpeedLimitTracker:
                     self.votes[value] = self.votes.get(value, 0) + 1
         elif self.last_seen_t is not None:
             gap = timestamp - self.last_seen_t
-            value, share = self.confirmed()
-            if (value is not None and gap >= SIGN_PASS_GAP_S and
-                    self.last_distance_m is not None and self.last_distance_m <= SIGN_PASS_DISTANCE_M):
-                self.limit_kmh, self.confidence = value, share
-                self.votes, self.last_seen_t, self.last_distance_m, self.last_read_t = {}, None, None, None
+            if gap >= SIGN_PASS_GAP_S and self._passed():
+                self._clear()
             elif gap >= SIGN_FORGET_S or gap < 0:
-                self.votes, self.last_seen_t, self.last_distance_m, self.last_read_t = {}, None, None, None
+                self._clear()
         return self.limit_kmh, self.confidence

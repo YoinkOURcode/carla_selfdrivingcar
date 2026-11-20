@@ -765,6 +765,10 @@ its default is 0.8. `driving.child_pedestrian_speed_factor` defaults to 0.15,
 retaining the strong slowdown near children with authored labels. On a clear
 30 km/h road these targets are 24 km/h and 4.5 km/h respectively. Partial risk
 interpolates each fraction; overlapping risks use the strongest reduction once.
+On top of the fractions, a sighted pedestrian caps the target at once at
+`driving.pedestrian_max_speed_mps` (6 m/s, about 22 km/h) and a sighted child at
+`driving.child_pedestrian_max_speed_mps` (3 m/s, about 11 km/h); 0 disables a cap.
+Above the cap the supervisor brakes, so a car at 15 m/s slows immediately and gets no throttle.
 Road, weather and following limits can reduce these targets further. The route
 controller and supervisor share these settings. Rain, wetness, darkness,
 visibility and actor awareness each cap the same base speed (trusted limit or
@@ -776,6 +780,9 @@ defaults to 0.8 and applies when a vehicle is detected ahead within 80 m and
 and pedestrian factors use the strongest reduction once. Side/rear vehicles
 and unclassified radar points do not trigger this vehicle factor. Pedestrian-conflict,
 occupied-crossing, close-front-hazard and signal stops remain enforced.
+A pedestrian-conflict stop is held until the car is stationary and the
+conflict has stayed clear for `clear_dwell_s`, so a walker leaving the front
+camera's path does not release the brake.
 Policy observations and weights are unchanged, and actor-requested braking
 is still respected.
 
@@ -881,6 +888,8 @@ less than 0.5 m net route progress while movement is safe and sensing is valid.
 Blocked movement and invalid sensing use an independent 60-second
 stagnation window. A red/yellow signal wait requires speed below `stop_speed_mps`
 (default 0.2 m/s) and front-bumper distance within 2.5 m of the stop line.
+The supervisor itself only holds within 2.25 m, so a small error in the
+perceived stop distance cannot leave the car just outside the accepted area.
 The approach buffer remains `crossing_buffer_m` (default 2 m).
 Connected stationary queues and stops at a nearby crosswalk
 also qualify. These waits use a zero speed target and brake hold, and pause both

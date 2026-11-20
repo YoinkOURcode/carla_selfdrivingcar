@@ -411,7 +411,7 @@ def test_signal_approach_assist_moves_a_car_stalled_just_short_of_the_stop_area(
 
 @pytest.mark.parametrize("state", [
     far_red(1.5),                           # inside the stop area: hold the red
-    far_red(2.4),
+    far_red(2.2),
     far_red(21., pedestrian_conflict=True),  # hard stop wins
     far_red(21., front_hazard_m=1.),
     far_red(21., observations_valid=False),

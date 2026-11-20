@@ -177,3 +177,45 @@ def test_pose_transform_round_trip_includes_yaw_and_height():
     pose = (100., -20., 2., np.pi/2.)
     np.testing.assert_allclose(transform_points(transform_points(points, pose), pose, True), points, atol=1e-10)
 
+
+
+# Captured town_transfer E07 A (E04 town01_actor seed 280000, frames 1072850-1073028):
+# two boxes on one lamp 2.2 m ahead of the bumper; a low-confidence yellow box appeared
+# beside the green after the red cleared and held the stopped car until its timeout.
+CAPTURED_LINE = [dict(points_ego=np.array([[4.2, -2., 0.], [4.2, 2., 0.]]), confidence=1.)]
+CAPTURED_PATH = np.array([[0., 0.], [5., 0.], [10., 0.], [20., 0.]])
+
+
+def captured_head(colour, confidence, z, y=2.2):
+    return dict(point_ego=np.array([6.3, y, z]), class_id=colour, confidence=confidence, bearing=(.44, -.04))
+
+
+def captured_step(tracker, t, lights):
+    return tracker.update(t, CAPTURED_LINE, lights, CAPTURED_PATH, 2., (0., 0., 0., 0.))[0]
+
+
+def captured_red_to_green():
+    tracker = SignalTracker()
+    assert captured_step(tracker, .05, [captured_head(1, .69, 2.6, 2.1), captured_head(1, .36, 2.9)])['red_light']
+    captured_step(tracker, .10, [captured_head(3, .32, 2.6, 2.1), captured_head(3, .58, 2.3)])
+    captured_step(tracker, .15, [captured_head(3, .48, 2.3)])
+    return tracker
+
+
+@pytest.mark.parametrize("yellow, green", [(.25, .42), (.32, .48), (.29, .52), (.34, .51)])
+def test_low_confidence_yellow_box_does_not_override_green_on_same_lamp(yellow, green):
+    fields = captured_step(captured_red_to_green(), .20,
+                           [captured_head(2, yellow, 2.6, 2.1), captured_head(3, green, 2.3)])
+    assert not fields["yellow_light"] and not fields["red_light"]
+
+
+def test_confident_yellow_on_same_lamp_is_still_reported():
+    fields = captured_step(captured_red_to_green(), .20,
+                           [captured_head(2, .7, 2.6, 2.1), captured_head(3, .3, 2.3)])
+    assert fields["yellow_light"]
+
+
+@pytest.mark.parametrize("red", [.9, .3])
+def test_any_competing_red_head_stays_red(red):
+    fields = captured_step(SignalTracker(), .05, [captured_head(3, .9, 2.6), captured_head(1, red, 2.6)])
+    assert fields["red_light"] and not fields["yellow_light"]

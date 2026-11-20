@@ -160,9 +160,12 @@ class SignalTracker:
                 selected = None
         if selected is not None:
             _, score, light, location, row = selected
-            # Conflicting equally plausible heads remain conservatively red/yellow.
+            # Conflicting equally plausible heads: any red stays red (conservative); otherwise
+            # the more confident head wins. Class order alone let a 0.25 yellow box beat a
+            # 0.5 green on the same lamp and hold a stopped car at the line (town_transfer E07).
             competing = [e for e in eligible if e[0] == selected[0] and e[1] <= score+.15]
-            selected = min(competing, key=lambda e:e[2]['class_id'])
+            selected = min(competing, key=lambda e:(e[2]['class_id'] != 1, -e[2]['confidence'],
+                                                    e[2]['class_id']))
             _, score, light, location, row = selected
             row[5] = 1./(1.+score)
             self.colour, self.confidence = light['class_id'], light['confidence']
