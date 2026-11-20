@@ -10,7 +10,7 @@ from typing import Any, Mapping, Protocol, runtime_checkable
 
 import numpy as np
 
-from .observations import FrameBundle
+from .observations import FrameBundle, STOP_LINE_TOKEN, TRAFFIC_LIGHT_TOKEN
 
 
 @dataclass(frozen=True)
@@ -75,8 +75,14 @@ class PerceptionPrediction:
     frame: int | None = None
     timestamp: float | None = None
     child_labels_authored: bool = False
+    signals: np.ndarray | None = None  # typed attention rows, never physical obstacles
 
     def __post_init__(self) -> None:
+        self.signals = np.asarray(self.signals if self.signals is not None else np.zeros((0, 16)), dtype=np.float32)
+        if (self.signals.ndim != 2 or self.signals.shape[1] != 16 or
+                not np.isfinite(self.signals).all() or
+                not np.isin(self.signals[:, 15], (TRAFFIC_LIGHT_TOKEN, STOP_LINE_TOKEN)).all()):
+            raise ValueError("signals must be finite [N, 16] typed light/stop-line rows")
         self.objects = np.asarray(self.objects, dtype=np.float32)
         if self.objects.ndim != 2 or self.objects.shape[1] != 16:
             raise ValueError("objects must have shape [N, 16]")

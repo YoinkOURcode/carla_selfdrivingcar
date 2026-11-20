@@ -109,7 +109,8 @@ def test_default_age_targets_agree_between_controller_and_supervisor(child, expe
     assert result.action[1] > 0.
 
 
-@pytest.mark.parametrize("child,expected", [(False, 8.), (True, 5.)])
+# The absolute caps (6 and 3 m/s) are below the 0.8 / 0.5 fractions of this 10 m/s limit.
+@pytest.mark.parametrize("child,expected", [(False, 6.), (True, 3.)])
 def test_nearby_sidewalk_pedestrian_has_age_specific_target(child, expected):
     import carla
 
@@ -127,11 +128,12 @@ def test_nearby_sidewalk_pedestrian_has_age_specific_target(child, expected):
 
 
 def test_child_risk_alone_and_mixed_risks_use_strongest_factor_without_stacking():
+    config = DrivingConfig(pedestrian_max_speed_mps=0., child_pedestrian_max_speed_mps=0.)  # fractions only
     state = DrivingState(speed_limit_mps=10., child_pedestrian_risk=1.)
-    assert compute_target_speed(state) == pytest.approx(5.)
-    assert compute_target_speed(replace(state, pedestrian_risk=1.)) == pytest.approx(5.)
-    assert compute_target_speed(replace(state, child_pedestrian_risk=.5,
-                                       pedestrian_risk=.5)) == pytest.approx(7.5)
+    assert compute_target_speed(state, config) == pytest.approx(5.)
+    assert compute_target_speed(replace(state, pedestrian_risk=1.), config) == pytest.approx(5.)
+    assert compute_target_speed(replace(state, child_pedestrian_risk=.5, pedestrian_risk=.5),
+                                config) == pytest.approx(7.5)
 
 
 def test_stage5_runtime_config_changes_only_pedestrian_factors():
@@ -146,8 +148,8 @@ def test_stage5_runtime_config_changes_only_pedestrian_factors():
 def test_vehicle_factor_preserves_following_limits_and_uses_strongest_slowdown():
     state = DrivingState(speed_limit_mps=10., vehicle_ahead=True)
     assert compute_target_speed(state) == pytest.approx(8.)
-    assert compute_target_speed(replace(state, pedestrian_risk=1.)) == pytest.approx(8.)
-    assert compute_target_speed(replace(state, child_pedestrian_risk=1.)) == pytest.approx(5.)
+    assert compute_target_speed(replace(state, pedestrian_risk=1.)) == pytest.approx(6.)
+    assert compute_target_speed(replace(state, child_pedestrian_risk=1.)) == pytest.approx(3.)
     assert compute_target_speed(replace(state, front_hazard_m=6.)) == pytest.approx(1.)
     assert compute_target_speed(replace(state, front_hazard_m=4.)) == 0.
     assert compute_target_speed(replace(state, front_hazard_m=1.)) == 0.
@@ -228,3 +230,24 @@ def test_pedestrian_lateral_position_selects_slowdown_front_hazard_or_stop(y, ri
     assert state.child_pedestrian_risk == risk
     assert (state.front_hazard_m is not None) == front
     assert state.pedestrian_conflict == conflict
+
+
+@pytest.mark.parametrize("child,cap", [(False, 6.), (True, 3.)])
+def test_sighted_pedestrian_caps_speed_at_once_and_cuts_throttle(child, cap):
+    config = DrivingConfig()
+    risk = {"child_pedestrian_risk" if child else "pedestrian_risk": 1.}
+    state = DrivingState(speed_mps=15., speed_limit_mps=25., **risk)
+    assert compute_target_speed(replace(state, pedestrian_risk=0., child_pedestrian_risk=0.),
+                                config) == pytest.approx(65. / 3.6)
+    assert compute_target_speed(state, config) == pytest.approx(cap)
+    fast = SafetySupervisor(config).step(state, (0., 1.), .05)
+    assert fast.action[1] < 0. and "speed_target_brake" in fast.intervention_reasons
+    slow = SafetySupervisor(config).step(replace(state, speed_mps=cap), (0., 1.), .05)
+    assert slow.action[1] <= .5 and slow.target_speed_mps == pytest.approx(cap)
+
+
+def test_child_cap_is_lower_than_adult_cap_and_zero_disables():
+    state = DrivingState(speed_limit_mps=15., pedestrian_risk=1., child_pedestrian_risk=1.)
+    assert compute_target_speed(state) < compute_target_speed(replace(state, child_pedestrian_risk=0.))
+    off = DrivingConfig(pedestrian_max_speed_mps=0., child_pedestrian_max_speed_mps=0.)
+    assert compute_target_speed(state, off) == pytest.approx(.5 * 15.)

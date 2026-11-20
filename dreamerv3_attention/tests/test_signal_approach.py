@@ -94,7 +94,7 @@ def test_signal_imminent_crossing_full_brake_and_green_release(signal):
     state = signal_state(signal, 2., 1.5, 28.5)
     result = supervisor.step(state, (0., 1.), .1)
     assert result.action[1] == -1.
-    stopped = replace(state, speed_mps=0., **{signal + "_light_distance_m": 2.4})
+    stopped = replace(state, speed_mps=0., **{signal + "_light_distance_m": 2.2})
     assert supervisor.step(stopped, (0., 1.), .1).action[1] == -1.
     green = replace(stopped, red_light=False, yellow_light=False)
     assert supervisor.step(green, (0., 1.), .1).action[1] > 0.
@@ -103,7 +103,7 @@ def test_signal_imminent_crossing_full_brake_and_green_release(signal):
 @pytest.mark.parametrize("signal", ["red", "yellow"])
 @pytest.mark.parametrize("speed", [3., 5., 8.])
 def test_no_forced_brake_outside_stop_area(signal, speed):
-    # Full brake is reserved for the 2.5 m stop area; farther out the
+    # Full brake is reserved for the 2.25 m hold area; farther out the
     # speed-target feedback brakes proportionally.
     supervisor = SafetySupervisor()
     supervisor.step(signal_state(signal, speed, 60.), (0., 1.), .05)

@@ -1,6 +1,5 @@
 """Local dashboard and bounded, on-demand destination driving."""
 
-import base64
 import io
 import json
 import math
@@ -14,6 +13,7 @@ import numpy as np
 from PIL import Image
 
 from .driving import DrivingConfig, config_default_speed
+from .observations import STOP_LINE_TOKEN, TRAFFIC_LIGHT_TOKEN
 
 
 _REWARD_LABELS = {
@@ -126,6 +126,15 @@ class EpisodeRewards:
         return {"reward_breakdown": rows, "episode_return": self.episode_return}
 
 
+def _object_label(row, source):
+    if row[15] == TRAFFIC_LIGHT_TOKEN:
+        colour = {1: "red", 2: "yellow", 3: "green"}.get(int(round(row[11]*3.)), "unknown")
+        return colour + " light"
+    if row[15] == STOP_LINE_TOKEN:
+        return "stop line"
+    return "pedestrian" if row[6] > .5 else "vehicle" if source == "ground_truth" else "object"
+
+
 def camera_objects(observation, attention, camera_matrix, intrinsics, size, max_objects, source):
     """Project policy object centres; projection alone does not prove visibility."""
     objects = []
@@ -145,7 +154,7 @@ def camera_objects(observation, attention, camera_matrix, intrinsics, size, max_
             continue
         # FusionEncoder prepends the image before the context/object tokens.
         weight = float(attention[index + 1]) if attention is not None else None
-        label = "pedestrian" if row[6] > 0.5 else "vehicle" if source == "ground_truth" else "object"
+        label = _object_label(row, source)
         objects.append({"slot": index - 4, "label": label, "x": float(u / width), "y": float(v / height),
                         "distance_m": float(np.linalg.norm(row[:3] * 100.)),
                         "confidence": float(row[10]), "attention": weight})
@@ -165,7 +174,7 @@ def policy_objects(observation, attention, max_objects, source, projected, camer
         slot = index - 4
         rows.append({
             "slot": slot,
-            "label": "pedestrian" if row[6] > .5 else "vehicle" if source == "ground_truth" else "object",
+            "label": _object_label(row, source),
             "distance_m": float(np.linalg.norm(row[:3] * 100.)) if row[8] > 0 else None,
             "confidence": float(row[10]),
             "attention": float(attention[index + 1]) if attention is not None else None,
@@ -203,13 +212,14 @@ def traffic_signal(observation):
 
 
 def snapshot(env, observation, attention, distance, info, mode):
+    """Return the telemetry dict; ``image`` is raw JPEG bytes (or None) for the caller to serve separately."""
     bundle = env.last_bundle
     image = None
     objects = []
     if bundle.rgb is not None and bundle.valid.get("rgb", False):
         buffer = io.BytesIO()
         Image.fromarray(bundle.rgb).save(buffer, format="JPEG", quality=80)
-        image = "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+        image = buffer.getvalue()
         calibration = bundle.calibration["sensors"]["rgb"]
         camera_matrix = (np.asarray(env.rig.sensors[0].get_transform().get_inverse_matrix()) @
                          np.asarray(env.ego.get_transform().get_matrix()))
@@ -251,6 +261,7 @@ class Viewer:
         self.lock = threading.Lock()
         self.stop_event = threading.Event()
         self.thread = None
+        self.jpeg, self.frame_id = None, 0
         self.state = {"status": "idle", "message": "Choose a route and start driving.",
                       "route_start": cfg.route_start, "route_end": cfg.route_end,
                       "checkpoint_available": bool(args.checkpoint),
@@ -263,6 +274,13 @@ class Viewer:
     def read(self):
         with self.lock:
             return self.state.copy()
+
+    def publish(self, frame):
+        """Keep the JPEG out of the JSON state; the page fetches it from /api/frame.jpg when it changes."""
+        jpeg = frame.pop("image")
+        with self.lock:
+            self.jpeg, self.frame_id = jpeg, self.frame_id + 1
+            self.state = {**self.state, **frame, "image": f"/api/frame.jpg?v={self.frame_id}" if jpeg else None}
 
     def start(self, request):
         budget = self.args.budget_seconds
@@ -277,6 +295,7 @@ class Viewer:
             if self.thread is not None and self.thread.is_alive():
                 raise ValueError("A drive is already active; stop it before starting another")
             self.stop_event.clear()
+            self.jpeg = None
             self.state = {"status": "starting", "message": "Connecting to CARLA...",
                           "route_start": start, "route_end": end,
                           "checkpoint_available": bool(self.args.checkpoint),
@@ -372,7 +391,7 @@ class Viewer:
             action, next_carry = agent.act(observation, carry, deterministic=True)
             weights = agent.encoder.last_attention
             attention = weights.cpu().numpy().reshape(-1) if weights is not None else None
-            self.update(**snapshot(env, observation, attention, distance, info, "dreamer"))
+            self.publish(snapshot(env, observation, attention, distance, info, "dreamer"))
             if done or truncated:
                 status = "arrived" if info.get("success") else "ended"
                 ending = info.get("termination_reason") or info.get("truncation_reason")
@@ -424,12 +443,19 @@ def make_server(viewer, port=8080):
                 pass
 
         def do_GET(self):
-            if self.path == "/":
+            path = self.path.partition("?")[0]  # the ?v= query only busts the browser's image cache
+            if path == "/":
                 self.reply(200, Path(__file__).with_name("viewer.html").read_bytes(), "text/html; charset=utf-8")
-            elif self.path == "/api/state":
+            elif path == "/api/state":
                 self.reply(200, json.dumps(viewer.read(), allow_nan=False).encode())
-            elif self.path == "/api/training":
+            elif path == "/api/training":
                 self.reply(200, json.dumps(viewer.training.read(), allow_nan=False).encode())
+            elif path in ("/api/frame.jpg", "/api/training/frame.jpg"):
+                jpeg = viewer.jpeg if path == "/api/frame.jpg" else viewer.training.frame()
+                if jpeg:
+                    self.reply(200, jpeg, "image/jpeg")
+                else:
+                    self.reply(404, b'{"error":"No frame"}')
             else:
                 self.reply(404, b'{"error":"Not found"}')
 

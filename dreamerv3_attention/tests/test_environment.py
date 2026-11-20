@@ -21,6 +21,7 @@ from dreamerv3_attention.sensors import PerceptionPrediction
 def fake_environment(mode="ground_truth", prediction=None, offroad=False):
     env = object.__new__(CarlaEnv)
     env.cfg = Config(image_size=16, max_objects=2, perception=mode,
+                     mixed_fields=["visibility_m"] if mode == "mixed" else [],
                      provider="mock:provider" if mode != "ground_truth" else "")
     env.carla = carla
     env.scenario = {}
@@ -130,6 +131,46 @@ def test_ground_truth_units_objects_and_authored_children():
     assert (obs["tokens"][1:4, 15] == -1).all()
 
 
+@pytest.mark.parametrize("mode,provider_visibility", [
+    ("ground_truth", None), ("external", 30.), ("external", 999.),
+    ("mixed", 30.), ("mixed", 999.),
+])
+@pytest.mark.parametrize("fog_density,expected", [
+    (-10., 60.), (0., 60.), (44., 60.), (55., 50.),
+    (77., 30.), (100., 100./11.), (110., 5.), (200., 5.),
+])
+def test_simulator_visibility_reaches_state_and_observation_with_hard_cap(
+        mode, provider_visibility, fog_density, expected):
+    fields = safe_external_fields()
+    fields["visibility_m"] = provider_visibility
+    prediction = (PerceptionPrediction(np.zeros((0, 16), np.float32),
+                  driving=fields, frame=42, timestamp=2.1) if mode != "ground_truth" else None)
+    env, _ = fake_environment(mode, prediction)
+    if mode == "external":
+        env.provider.camera_only = True
+    env.world.get_weather = lambda: NS(precipitation=0., wetness=0., sun_altitude_angle=60.,
+                                       fog_density=fog_density)
+    state, obs = env._observe(42)
+    assert state.observations_valid
+    assert state.visibility_m == pytest.approx(expected)
+    assert env.oracle_state.visibility_m == pytest.approx(expected)
+    assert obs["tokens"][0, 9] == pytest.approx(expected/100.)
+
+
+@pytest.mark.parametrize("mode", ["ground_truth", "external", "mixed"])
+def test_simulator_rain_wetness_night_reach_state_in_every_perception_mode(mode):
+    prediction = (PerceptionPrediction(np.zeros((0, 16), np.float32), driving=safe_external_fields(),
+                                       frame=42, timestamp=2.1) if mode != "ground_truth" else None)
+    env, _ = fake_environment(mode, prediction)
+    if mode == "external":
+        env.provider.camera_only = True
+    env.world.get_weather = lambda: NS(precipitation=80., wetness=70., sun_altitude_angle=-20.,
+                                       fog_density=0.)
+    state, obs = env._observe(42)
+    assert (state.rain, state.wetness, state.night) == pytest.approx((0.8, 0.7, 1.0))
+    assert obs["tokens"][0, 6:9] == pytest.approx([0.8, 0.7, 1.0])
+
+
 def test_physical_offroad_uses_unprojected_driving_lane_query():
     env, _ = fake_environment(offroad=True)
     state, _ = env._observe(42)
@@ -162,6 +203,55 @@ def test_external_mode_does_not_leak_oracle_hazards():
     assert state.observations_valid
 
 
+def test_camera_only_provider_excludes_oracle_sensors_from_control():
+    prediction = PerceptionPrediction(np.zeros((0, 16), np.float32),
+        driving=safe_external_fields(), frame=42, timestamp=2.1)
+    env, bundle = fake_environment("external", prediction)
+    env.provider.camera_only = True
+    seen = []
+    env.provider.predict = lambda inputs: seen.append(inputs) or prediction
+    bundle.calibration = {"sensors": {"rgb": {"known_camera": True}, "depth": {"privileged": True}}}
+    bundle.depth = np.ones((32, 32), np.float32)
+    bundle.events = ({"oracle_event": True},)
+    for side in ("front", "left", "right", "rear"):
+        bundle.radars[side] = np.array([[3., 0., 1., 0.]], np.float32)
+        bundle.valid[side] = False
+
+    def forbidden_radar(*args):
+        raise AssertionError("Map-filtered radar reached camera-only control")
+
+    env._radar_hazard = forbidden_radar
+    state, obs = env._observe(42)
+    assert state.observations_valid
+    assert not obs["radar_valid"].any()
+    assert not obs["mask"][6:].any()
+    assert env.radar_hazards == {}
+    assert state.front_hazard_m is state.side_hazard_m is state.rear_hazard_m is None
+    assert state.pedestrian_risk == state.child_pedestrian_risk == 0.
+    assert env.oracle_state.child_pedestrian_risk == 1.
+    assert seen[0].depth is None and seen[0].radars == {} and seen[0].events == ()
+    assert seen[0].valid == {"rgb": True}
+    assert seen[0].calibration == {"sensors": {"rgb": {"known_camera": True}}}
+
+
+def test_depth_using_camera_provider_gets_aligned_depth_only():
+    prediction = PerceptionPrediction(np.zeros((0, 16), np.float32),
+        driving=safe_external_fields(), frame=42, timestamp=2.1)
+    env, bundle = fake_environment("external", prediction)
+    env.provider.camera_only = env.provider.uses_depth_camera = True
+    seen = []
+    env.provider.predict = lambda inputs: seen.append(inputs) or prediction
+    bundle.calibration = {"sensors": {"rgb": {"known_camera": True}, "depth": {"same_mount": True},
+                                      "front": {"radar": True}}}
+    bundle.depth = np.ones((32, 32), np.float32)
+    bundle.valid["depth"] = True
+    bundle.events = ({"oracle_event": True},)
+    env._observe(42)
+    assert seen[0].depth is bundle.depth and seen[0].radars == {} and seen[0].events == ()
+    assert seen[0].valid == {"rgb": True, "depth": True}
+    assert seen[0].calibration == {"sensors": {"rgb": {"known_camera": True}, "depth": {"same_mount": True}}}
+
+
 def test_external_objects_trigger_supervisor_hazard_state():
     objects = np.zeros((1, 16), np.float32)
     objects[0, :2] = [.04, .01]
@@ -187,10 +277,33 @@ def test_external_child_flags_require_authored_provenance():
 def test_missing_external_contract_and_missing_sensors_force_invalid():
     prediction = PerceptionPrediction(np.zeros((0, 16), np.float32), driving={"observations_valid": True}, frame=42, timestamp=2.1)
     env, bundle = fake_environment("external", prediction)
-    assert not env._observe(42)[0].observations_valid
+    state, _ = env._observe(42)
+    assert not state.observations_valid
+    assert state.observation_invalid_reason == "missing_perception_fields"
     env.provider.predict = lambda b: replace(prediction, driving=safe_external_fields())
     bundle.valid["rear"] = False
-    assert not env._observe(42)[0].observations_valid
+    state, _ = env._observe(42)
+    assert not state.observations_valid
+    assert state.observation_invalid_reason == "required_sensor_invalid"
+
+
+def test_external_lane_diagnostics_reach_step_metrics_with_their_frames():
+    fields = dict(safe_external_fields(), lane_source="route_fallback")
+    prediction = PerceptionPrediction(np.zeros((0, 16), np.float32),
+                                      driving=fields, frame=42, timestamp=2.1)
+    env, _ = fake_environment("external", prediction)
+    before, _ = env._observe(42)
+    env.provider.predict = lambda _: replace(prediction, driving=dict(
+        fields, observations_valid=False, observation_invalid_reason="object_position_unavailable"))
+    after, _ = env._observe(42)
+    step_env = fake_step_environment(before=before, after=after)
+    step_env.supervisor = SafetySupervisor()
+    _, _, _, _, info = step_env.step((0., 1.))
+    assert info["safety_before"]["lane_source"] == "route_fallback"
+    assert info["safety_before"]["observation_invalid_reason"] is None
+    assert info["target_speed_mps"] == pytest.approx(1.5)
+    assert info["policy_lane_source"] == "route_fallback"
+    assert info["policy_observation_invalid_reason"] == "object_position_unavailable"
 
 
 def test_external_future_predictions_rejected_and_stale_inputs_masked():
@@ -379,6 +492,25 @@ def test_reset_hook_restarts_watchdog_after_initial_oracle_observation(monkeypat
     assert list(env.inactivity._short_history) == [(0., 7.)]
 
 
+@pytest.mark.parametrize("enabled,sun,lit", [
+    (True, -15., True), (True, 30., False), (False, -15., False)])
+def test_night_headlights_switch_on_ego_low_beams_only_when_enabled_at_night(monkeypatch, enabled, sun, lit):
+    env = reset_test_environment(monkeypatch)
+    env.cfg = replace(env.cfg, night_headlights=enabled)
+    states = []
+    env.ego = NS(set_light_state=states.append)
+    env.world.get_weather = lambda: NS(sun_altitude_angle=sun)
+    env._reset()
+    expected = carla.VehicleLightState(carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam |
+                                       carla.VehicleLightState.HighBeam)
+    assert states == ([expected] if lit else [])
+
+
+def test_night_headlights_must_be_boolean():
+    with pytest.raises(ValueError, match="night_headlights must be a boolean"):
+        Config(night_headlights="true").validate()
+
+
 @pytest.mark.parametrize("x", [-7., 22.])
 def test_reset_updates_ego_snapshot_before_spawning_relative_hazards(monkeypatch, x):
     env = reset_test_environment(monkeypatch)
@@ -420,12 +552,40 @@ def test_reset_updates_ego_snapshot_before_spawning_relative_hazards(monkeypatch
     assert len(env.actors) > 3
 
 
-def traffic_waypoint(x, y=0., *, road=1, lane=1, section=0, yaw=0.):
+def traffic_waypoint(x, y=0., *, road=1, lane=1, section=0, yaw=0., junction_at=None):
+    """Straight +x lane waypoint; ``junction_at`` is the x where the lane enters a junction."""
+    def following(step):
+        return [] if junction_at is None else [traffic_waypoint(
+            x+step, y, road=road, lane=lane, section=section, yaw=yaw, junction_at=junction_at)]
     return NS(transform=carla.Transform(carla.Location(x=x, y=y), carla.Rotation(yaw=yaw)),
-              road_id=road, section_id=section, lane_id=lane, lane_width=3.5)
+              road_id=road, section_id=section, lane_id=lane, lane_width=3.5,
+              is_junction=junction_at is not None and x >= junction_at, next=following)
 
 
-def install_traffic_stops(env, route_waypoints, stops):
+def test_stop_moves_from_carla_trigger_waypoint_to_junction_entry():
+    # Regression: Town01 stop waypoints sit 7-13 m before the junction, so the
+    # car stopped about 11 m short of the intersection.
+    env, _ = fake_environment()
+    install_traffic_stops(env, [traffic_waypoint(0), traffic_waypoint(100)],
+                          [traffic_waypoint(20, junction_at=29.1)])
+    np.testing.assert_allclose([position for _, position in env.traffic_stops], [29.])
+    state, _ = env._observe(42)
+    assert state.red_light and state.red_light_distance_m == pytest.approx(27.)
+    # A junction beyond the search limit leaves the stop where CARLA put it.
+    install_traffic_stops(env, [traffic_waypoint(0), traffic_waypoint(100)],
+                          [traffic_waypoint(20, junction_at=60.)])
+    np.testing.assert_allclose([position for _, position in env.traffic_stops], [20.])
+    # A head before the junction caps the stop 2 m short of its pole, so the camera
+    # still sees it at rest; it never moves the stop before CARLA's waypoint.
+    install_traffic_stops(env, [traffic_waypoint(0), traffic_waypoint(100)],
+                          [traffic_waypoint(20, junction_at=29.1)], pole_x=27.5)
+    np.testing.assert_allclose([position for _, position in env.traffic_stops], [25.5])
+    install_traffic_stops(env, [traffic_waypoint(0), traffic_waypoint(100)],
+                          [traffic_waypoint(20, junction_at=29.1)], pole_x=19.)
+    np.testing.assert_allclose([position for _, position in env.traffic_stops], [20.])
+
+
+def install_traffic_stops(env, route_waypoints, stops, pole_x=1000.):
     phase = [carla.TrafficLightState.Red]
     calls = {"geometry": 0, "phase": 0}
 
@@ -438,7 +598,8 @@ def install_traffic_stops(env, route_waypoints, stops):
         return phase[0]
 
     light = NS(type_id="traffic.traffic_light", id=20,
-               get_stop_waypoints=stop_waypoints, get_state=get_state)
+               get_stop_waypoints=stop_waypoints, get_state=get_state,
+               get_transform=lambda: carla.Transform(carla.Location(x=pole_x, y=4.)))
     env.world.get_actors = lambda: [light]
     env.route = Route([(wp.transform.location.x, wp.transform.location.y) for wp in route_waypoints])
     env._cache_traffic_stops(route_waypoints)
@@ -667,6 +828,35 @@ def test_queue_must_connect_stopped_vehicles_to_red_light():
     env.world.get_actors = lambda: [vehicle(3, 21., 2.), vehicle(5, 5.)]
     env._observe(42)
     assert not env.oracle_state.red_light_queue
+
+
+@pytest.mark.parametrize("phase,queued", [
+    (carla.TrafficLightState.Red, True), (carla.TrafficLightState.Green, False)])
+def test_queue_reaches_red_light_beyond_signal_lookahead(phase, queued):
+    # Experiment 28 episode 6172: stopped 4 m behind a queue whose red light
+    # was 38 m ahead, beyond the 30 m lookahead, so the stationary timer expired.
+    env, _ = fake_environment()
+    env.traffic_stops = [(NS(get_state=lambda: phase), 50.)]
+    def vehicle(actor_id, x):
+        return NS(id=actor_id, type_id="vehicle.test", is_alive=True, attributes={},
+                  get_location=lambda: carla.Location(x=x),
+                  get_transform=lambda: carla.Transform(carla.Location(x=x)),
+                  get_velocity=lambda: carla.Vector3D(),
+                  bounding_box=carla.BoundingBox(carla.Location(), carla.Vector3D(2, 1, 1)))
+    env.world.get_actors = lambda: [vehicle(i, x) for i, x in enumerate((46., 37., 28., 19., 10.), 3)]
+    env._observe(42)
+    assert not env.oracle_state.red_light
+    assert env.oracle_state.red_light_queue is queued
+
+
+def test_queue_beyond_lookahead_pauses_stationary_timeout():
+    state = DrivingState(speed_limit_mps=10., red_light_queue=True, vehicle_ahead=True,
+                         front_hazard_m=4.)
+    env = fake_step_environment(before=state, after=state, max_steps=1)
+    _, _, _, truncated, info = env.step((0., -1.))
+    assert not truncated and info["truncation_reason"] is None
+    for component in ("time", "idle", "target_tracking"):
+        assert info["reward_components"][component] == 0.
 
 
 def test_scenario_spawns_vehicle_adult_and_child():
@@ -985,6 +1175,19 @@ def test_moving_vehicle_uses_rule_following_autopilot_and_current_speed_limit():
     actor.set_target_velocity.assert_not_called()
 
 
+def test_released_lead_vehicle_outpaces_speed_limit_after_release_step():
+    env, manager = npc_control_environment()
+    actor = Mock(type_id="vehicle.test")
+    actor.get_speed_limit.return_value = 30.
+    env.traffic_manager, env.steps = manager, 9
+    env.moving = [(actor, {"speed_mps": 3., "release_step": 10})]
+    env._update_npcs()
+    manager.set_desired_speed.assert_called_with(actor, 10.8)
+    env.steps = 10
+    env._update_npcs()
+    manager.set_desired_speed.assert_called_with(actor, 45.)
+
+
 def test_authored_stationary_vehicle_remains_braked_without_autopilot():
     env, _ = npc_control_environment()
     actor = Mock(type_id="vehicle.test")
@@ -1149,3 +1352,81 @@ def test_red_light_queue_reuses_actor_state_instead_of_querying_actor_again():
     actor.get_location.assert_called_once()
     actor.get_velocity.assert_called_once()
     env.world.get_actors.assert_called_once()
+
+
+def test_provider_gets_odometry_path_bumper_and_signal_rows_are_not_hazards():
+    from dreamerv3_attention.observations import STOP_LINE_TOKEN, TRAFFIC_LIGHT_TOKEN
+    signals = np.zeros((2, 16), np.float32)
+    signals[0, [0, 8, 15]] = [.10, 1., STOP_LINE_TOKEN]
+    signals[1, [0, 8, 11, 15]] = [.15, 1., 1/3., TRAFFIC_LIGHT_TOKEN]
+    prediction = PerceptionPrediction(np.zeros((0, 16), np.float32), driving=safe_external_fields(),
+                                      frame=42, timestamp=2.1, signals=signals)
+    env, _ = fake_environment("external", prediction)
+    seen = []
+    env.provider.predict = lambda inputs: seen.append(inputs) or prediction
+    state, obs = env._observe(42)
+    assert seen[0].ego_pose == pytest.approx((0., 0., 0., 0.))
+    assert seen[0].front_bumper_m == pytest.approx(2.)
+    np.testing.assert_allclose(seen[0].ego_path[:3], [[0., 0.], [1., 0.], [5., 0.]], atol=1e-6)
+    np.testing.assert_allclose(obs["tokens"][4:6], signals)
+    assert obs["mask"][4:6].all()
+    assert state.front_hazard_m is None and not state.pedestrian_conflict
+    assert seen[0].route_stop_lines == ()
+
+
+def test_provider_gets_route_stop_lines_on_planned_path_only():
+    prediction = PerceptionPrediction(np.zeros((0, 16), np.float32), driving=safe_external_fields(),
+                                      frame=42, timestamp=2.1)
+    env, _ = fake_environment("external", prediction)
+    light = NS(get_state=lambda: carla.TrafficLightState.Green)
+    # Stops at 30 m and 70 m lie on the 80 m planned path; 95 m does not yet.
+    env.traffic_stops = [(light, 30.), (light, 70.), (light, 95.)]
+    seen = []
+    env.provider.predict = lambda inputs: seen.append(inputs) or prediction
+    env._observe(42)
+    lines = seen[0].route_stop_lines
+    assert len(lines) == 2
+    np.testing.assert_allclose(lines[0], [[30., -4., 0.], [30., 4., 0.]], atol=1e-6)
+    np.testing.assert_allclose(lines[1], [[70., -4., 0.], [70., 4., 0.]], atol=1e-6)
+
+
+def test_near_junction_covers_approach_and_inside_only():
+    env, _ = fake_environment()
+    env.route = Route([(x, 0.) for x in range(0, 101, 2)],
+                      junctions=[40 <= x <= 50 for x in range(0, 101, 2)])
+    assert [env._near_junction(p) for p in (20., 24., 26., 45., 51.9, 52.1, 80.)] == [
+        False, False, True, True, True, False, False]
+    env.route = Route([(0., 0.), (100., 0.)])
+    assert not env._near_junction(50.)
+
+
+def test_provider_gets_near_junction_flag():
+    prediction = PerceptionPrediction(np.zeros((0, 16), np.float32), driving=safe_external_fields(),
+                                      frame=42, timestamp=2.1)
+    env, _ = fake_environment("external", prediction)
+    env.route = Route([(x, 0.) for x in range(0, 101, 2)],
+                      junctions=[x >= 10 for x in range(0, 101, 2)])
+    seen = []
+    env.provider.predict = lambda inputs: seen.append(inputs) or prediction
+    env._observe(42)
+    assert seen[0].near_junction
+
+
+def test_provider_path_heading_is_the_route_tangent_in_a_sharp_bend():
+    # Regression (town_transfer E04, Town02 41->93 at ~426 m): the planned path started
+    # with a 5 m chord, so in a ~53 deg / 10 m bend the route heading was off by ~0.25 rad
+    # and the actor cut the corner into a collision.
+    from dreamerv3_attention.navigation import Route
+    from dreamerv3_attention.vision import path_lane
+    prediction = PerceptionPrediction(np.zeros((0, 16), np.float32), driving=safe_external_fields(),
+                                      frame=42, timestamp=2.1)
+    env, _ = fake_environment("external", prediction)
+    radius, s = 10., np.arange(0., 40., 2.)
+    env.route = Route(np.column_stack([radius*np.sin(s/radius), radius*(1.-np.cos(s/radius))]))
+    seen = []
+    env.provider.predict = lambda inputs: seen.append(inputs) or prediction
+    env._observe(42)
+    lane, heading = path_lane(seen[0].ego_path)
+    _, _, route_heading = Route(env.route.points).project((0., 0.))
+    simulator_heading = -route_heading  # ego yaw 0: the environment's heading_error_rad
+    assert abs(lane) < 1e-6 and heading == pytest.approx(simulator_heading, abs=.02)

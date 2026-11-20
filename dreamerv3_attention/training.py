@@ -4,6 +4,7 @@ import csv
 import fcntl
 import importlib.metadata
 import json
+import math
 import os
 import random
 import shlex
@@ -19,10 +20,35 @@ from tensordict import TensorDict
 from torchrl.data import LazyTensorStorage, SliceSampler, TensorDictReplayBuffer
 
 from .config import Config
-from .model import Agent
+from .model import Agent, pursuit_steer, route_point
 
 SCHEMA = "carla-dreamerv3-tokens-v2"
 GPU_LOCK_PATH = "/tmp/carla-training-gpu.lock"
+FOCUS_CANDIDATES = 8  # sequences drawn per batch slot when looking for turns (~6% of replay blocks) or stops
+TURN_STEER = 0.3  # |pure-pursuit steer| above this counts as a turn
+STANDSTILL_MPS = 0.2  # DrivingConfig.stop_speed_mps
+
+
+def standstill_steps(sample):
+    """Masks of stopped steps whose longitudinal label says go (release) or brake at a red (hold).
+
+    Reads the next observation and its aligned label, as the longitudinal BC loss does.
+    Replay without longitudinal labels has neither.
+    """
+    context = sample["next", "tokens"][..., 0, :]
+    target = sample.get(("next", "longitudinal_target"), None)
+    labelled = sample.get(("next", "longitudinal_target_valid"), None)
+    if target is None or labelled is None:
+        none = torch.zeros(context.shape[:-1], dtype=torch.bool)
+        return none, none
+    # Context token: [0] speed/30, [12] red light, [15] observations valid.
+    stopped = (sample["next", "mask"][..., 0].bool() & (context[..., 15] > .5) &
+               (context[..., 0] * 30. < STANDSTILL_MPS))
+    labelled = labelled[..., 0].bool() & ~sample["next", "done"][..., 0].bool()
+    red = context[..., 12] > .5
+    release = stopped & labelled & ~red & (target[..., 0] > .5)
+    hold = stopped & labelled & red & (target[..., 0] < -.5)
+    return release, hold
 
 
 class BudgetExpired(TimeoutError):
@@ -156,6 +182,37 @@ class Trainer:
         self.scenario_fork = None
         self.speed_cap_fork = None
         self.training_mode = "untrained"
+
+    def sample(self):
+        """Replay sample of batch*sequence steps; turn/standstill fractions reserve part of it for focused sequences."""
+        cfg = self.cfg
+        if not (cfg.turn_sample_fraction or cfg.standstill_sample_fraction):
+            return self.replay.sample()
+        candidates = self.replay.sample(cfg.batch * cfg.sequence * FOCUS_CANDIDATES)
+        if candidates.numel() != cfg.batch * cfg.sequence * FOCUS_CANDIDATES:
+            return self.replay.sample()  # not enough full sequences yet; caller handles the short sample
+        sequences = candidates.reshape(-1, cfg.sequence)
+        chosen = []
+        if cfg.standstill_sample_fraction:
+            release, hold = (mask.any(-1) for mask in standstill_steps(sequences))
+            # Candidates are drawn uniformly, so taking pools in draw order is random.
+            pools = (torch.nonzero(release).flatten().tolist(),
+                     torch.nonzero(hold & ~release).flatten().tolist())
+            for _ in range(math.ceil(cfg.standstill_sample_fraction * cfg.batch)):
+                # A coin flip per slot balances go and hold labels, so the actor is not taught to roll off reds.
+                first = int(torch.rand(()) < .5)
+                pool = pools[first] or pools[1 - first]
+                if pool:
+                    chosen.append(pool.pop(0))
+        if cfg.turn_sample_fraction:
+            valid, x, y = route_point(sequences)
+            turning = (valid & (pursuit_steer(x, y).abs() > TURN_STEER)).sum(-1)
+            wanted = min(math.ceil(cfg.turn_sample_fraction * cfg.batch), cfg.batch - len(chosen))
+            # Stable sort keeps the (uniformly random) draw order among equally turn-heavy sequences.
+            order = torch.argsort(turning, descending=True, stable=True)
+            chosen += [int(i) for i in order if turning[i] > 0 and int(i) not in chosen][:wanted]
+        rest = [i for i in range(len(sequences)) if i not in chosen]
+        return sequences[chosen + rest[:cfg.batch - len(chosen)]].reshape(-1)
 
     def checkpoint(self, path):
         path = Path(path)
@@ -309,7 +366,7 @@ class Trainer:
                         self.debt += self.cfg.updates_per_step
                         while self.debt >= 1:
                             update_start = time.perf_counter()
-                            sample = self.replay.sample()
+                            sample = self.sample()
                             if sample.numel() != self.cfg.batch * self.cfg.sequence:
                                 # SliceSampler has no full sequence yet. Keep debt bounded.
                                 self.debt = min(self.debt, 1.)

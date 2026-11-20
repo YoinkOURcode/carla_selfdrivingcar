@@ -40,6 +40,12 @@ class LiveTraining:
         temporary.write_text(json.dumps(self.state, allow_nan=False))
         temporary.replace(self.output / "live.json")
 
+    def write_frame(self, jpeg):
+        # Written before live.json so the state never points at a frame that is not on disk yet.
+        temporary = self.output / "live.tmp.jpg"
+        temporary.write_bytes(jpeg)
+        temporary.replace(self.output / "live.jpg")
+
     def publish(self, env, observation, record, *, reset=False, attention=None, attention_enabled=None):
         from .viewer import snapshot
 
@@ -59,12 +65,16 @@ class LiveTraining:
         now = time.monotonic()
         final = ((self.mode == "training" and record.get("frames", 0) >= self.cfg.steps) or
                  record.get("terminated") or record.get("truncated"))
-        if not reset and not final and now-self.last_publish < .2:
+        if not reset and not final and now-self.last_publish < .1:
             return
         self.last_publish = now
         # Callers publish before stepping, so ``attention`` belongs to ``observation``.
         # The final post-step frame has no weights; ``attention_enabled`` keeps its label correct.
         frame = snapshot(env, observation, attention, self.distance, record, self.mode)
+        jpeg = frame.pop("image")
+        if jpeg:
+            self.write_frame(jpeg)
+        frame["image"] = f"/api/training/frame.jpg?v={time.time_ns()}" if jpeg else None
         if attention_enabled is not None:
             frame["attention_enabled"] = attention_enabled
         reward_state = self.rewards.snapshot()
@@ -101,9 +111,17 @@ class TrainingMonitor:
     def __init__(self, run=None, root="runs"):
         self.run = Path(run) if run else None
         self.root = Path(root)
+        self.scanned = 0.  # monotonic time of the last rescan
+        self.latest = None
 
-    def read(self):
-        paths = [self.run / "live.json"] if self.run else list(self.root.rglob("live.json"))
+    def frame(self):
+        """JPEG beside the live.json most recently returned by read(), or None."""
+        try:
+            return self.latest.with_name("live.jpg").read_bytes()
+        except (OSError, AttributeError):
+            return None
+
+    def _states(self, paths):
         states = []
         for path in paths:
             try:
@@ -120,11 +138,35 @@ class TrainingMonitor:
                 state["age_s"] = max(0., time.time() - state["updated_at"])
                 if not active and state["status"] in ("starting", "training", "evaluating"):
                     state.update(status="ended", message="Run ended; showing its last captured frame.")
-                states.append(state)
+                states.append((path, state))
             except (OSError, ValueError, KeyError, TypeError):
                 continue
+        return states
+
+    def _rescan(self):
+        # Parsing every old live.json is slow, and a live run rewrites its file constantly,
+        # so only the most recently modified files can be the best candidates.
+        def mtime(path):
+            try:
+                return path.stat().st_mtime
+            except OSError:
+                return 0.
+        paths = sorted(self.root.rglob("live.json"), key=mtime, reverse=True)[:5]
+        self.scanned = time.monotonic()
+        return self._states(paths)
+
+    def read(self):
+        if self.run:
+            states = self._states([self.run / "live.json"])
+        else:
+            # Polled ~10x/s: re-parse only the shown run, and look for newer runs every few seconds.
+            states = (self._states([self.latest])
+                      if self.latest is not None and time.monotonic() - self.scanned < 3 else [])
+            if not states:
+                states = self._rescan()
         if not states:
             return {"status": "idle", "active": False,
                     "message": "No live feed found. Waiting for a CARLA training or evaluation run.",
                     "run": str(self.run) if self.run else None}
-        return max(states, key=lambda state: (state["active"], state["updated_at"]))
+        self.latest, best = max(states, key=lambda item: (item[1]["active"], item[1]["updated_at"]))
+        return best

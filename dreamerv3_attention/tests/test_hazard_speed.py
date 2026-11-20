@@ -17,6 +17,27 @@ SOFT_HAZARDS = [
 ]
 
 
+@pytest.mark.parametrize("limit", [None, 30. / 3.6])
+@pytest.mark.parametrize("visibility,expected_kmh", [
+    (100., 30.), (80., 30.), (60., 28.), (40., 26.), (36., 25.6),
+    (30., 25.), (20., 50./3.),
+    (10., 25./3.), (5., 25./6.), (0., 0.),
+])
+def test_visibility_lowers_target_from_25_kmh_at_30_metres(limit, visibility, expected_kmh):
+    state = DrivingState(speed_limit_mps=limit, visibility_m=visibility)
+    assert compute_target_speed(state)*3.6 == pytest.approx(expected_kmh)
+    assert state.speed_limit_mps == limit
+
+
+def test_controller_and_supervisor_agree_on_30_metre_visibility_target():
+    state = DrivingState(speed_mps=5., speed_limit_mps=30./3.6, visibility_m=30.)
+    action = RouteController().act(observation(speed=5., limit=30./3.6, visibility=30.), None)[0]
+    result = SafetySupervisor().step(state, action, .05)
+    assert result.target_speed_mps*3.6 == pytest.approx(25.)
+    assert action[1] == pytest.approx(.5*(25./3.6-5.), abs=1e-6)
+    assert result.action[1] == pytest.approx(action[1], abs=1e-6)
+
+
 @pytest.mark.parametrize("hazards", [*combinations(SOFT_HAZARDS, 2), SOFT_HAZARDS])
 @pytest.mark.parametrize("state,config", [
     (DrivingState(speed_limit_mps=30. / 3.6), DrivingConfig()),
@@ -50,19 +71,20 @@ def test_rain_night_lead_vehicle_target_agrees_between_controller_and_supervisor
     assert result.action[1] > 0.
 
 
-def test_yellow_approach_does_not_multiply_a_visibility_cap():
-    state = DrivingState(speed_mps=4., speed_limit_mps=10., visibility_m=20.,
+@pytest.mark.parametrize("visibility,expected", [(10., 25./9.), (20., 3.2)])
+def test_yellow_approach_does_not_multiply_a_visibility_cap(visibility, expected):
+    state = DrivingState(speed_mps=4., speed_limit_mps=10., visibility_m=visibility,
                          yellow_light=True, yellow_light_distance_m=100.)
-    assert compute_target_speed(state) == pytest.approx(2.5)
+    assert compute_target_speed(state) == pytest.approx(expected)
 
 
-def test_stage6_logged_rain_night_mixed_state_uses_visibility_cap():
+def test_stage6_logged_rain_night_mixed_state_uses_strongest_weather_cap():
     # Episode 2577, first safety_before state in stage6_run/metrics.jsonl.
     state = DrivingState(speed_mps=.4268595874325346, speed_limit_mps=30. / 3.6,
                          rain=.3, wetness=.8, night=1., visibility_m=54.54545454545454,
                          pedestrian_risk=1., vehicle_ahead=True, front_hazard_m=17.26832151412964)
     result = SafetySupervisor().step(state, (0., 1.), .05)
-    assert result.target_speed_mps == pytest.approx(5.681818181818182)
+    assert result.target_speed_mps == pytest.approx(30./3.6 * .7)
     assert result.action[1] == 1.
 
 

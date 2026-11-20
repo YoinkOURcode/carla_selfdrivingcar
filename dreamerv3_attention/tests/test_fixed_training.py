@@ -20,6 +20,7 @@ from dreamerv3_attention.training import BudgetExpired, Trainer
 
 def test_controller_uses_navigation_and_fails_safe():
     obs = {"tokens": np.zeros((5, 16)), "mask": np.ones(5, dtype=bool)}
+    obs["tokens"][0, 9] = 1.  # 100 m visibility for the moving-controller test.
     obs["tokens"][0, 15] = 1
     obs["tokens"][1, :2] = [.05, .02]
     obs["tokens"][1, 15] = -1
@@ -28,7 +29,7 @@ def test_controller_uses_navigation_and_fails_safe():
     controller = RouteController()
     action, _ = controller.act(obs, None)
     assert action[0] > 0 and action[1] > 0
-    obs["tokens"][0, 0] = 5/30
+    obs["tokens"][0, 0] = 10/30
     assert controller.act(obs, None)[0][1] < 0
     obs["mask"][2] = False
     np.testing.assert_array_equal(controller.act(obs, None)[0], [0, -1])
@@ -215,6 +216,7 @@ def test_controller_warmup_populates_moving_actions_before_learning(tmp_path):
     reset, step = env.reset, env.step
 
     def navigation(obs):
+        obs["tokens"][0, 9] = 1.
         obs["tokens"][0, 15] = 1
         obs["tokens"][1, :2] = [.05, 0]
         obs["tokens"][1, 15] = -1

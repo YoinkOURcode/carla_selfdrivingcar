@@ -6,16 +6,24 @@ import pytest
 from dreamerv3_attention.config import Config
 
 from dreamerv3_attention.driving import (
-    DrivingConfig, DrivingState, RewardConfig, SafetySupervisor, action_to_controls, compute_reward,
-    compute_target_speed,
-    signal_wait,
+    SIGNAL_HOLD_AREA_M, DrivingConfig, DrivingState, RewardConfig, SafetySupervisor,
+    action_to_controls, compute_reward, compute_target_speed, signal_wait,
 )
 
 
 class TargetSpeedTests(unittest.TestCase):
     def test_uncertain_limit_uses_conservative_configured_default(self):
         self.assertEqual(compute_target_speed(DrivingState(
-            speed_limit_mps=20.0, speed_limit_confidence=0.1)), 3.0)
+            speed_limit_mps=20.0, speed_limit_confidence=0.1)), 30.0 / 3.6)
+
+    def test_unknown_limit_uses_30_kmh_without_changing_observed_limit(self):
+        state = DrivingState(speed_limit_mps=None, speed_limit_confidence=0.)
+        self.assertEqual(compute_target_speed(state), 30.0 / 3.6)
+        self.assertIsNone(state.speed_limit_mps)
+        self.assertEqual(state.speed_limit_confidence, 0.)
+        self.assertEqual(compute_target_speed(state, DrivingConfig(default_speed_mps=3.)), 3.)
+        state.speed_limit_mps, state.speed_limit_confidence = 5., 1.
+        self.assertEqual(compute_target_speed(state), 5.)
 
     def test_weather_and_pedestrian_risk_lower_target(self):
         clear = compute_target_speed(DrivingState(speed_limit_mps=12))
@@ -176,7 +184,7 @@ class RewardTests(unittest.TestCase):
     def test_lane_departure_and_speeding_gate_progress(self):
         start = DrivingState(route_progress_m=1)
         for violation in (DrivingState(route_progress_m=2, lane_departure=True),
-                          DrivingState(route_progress_m=2, speed_mps=4)):
+                          DrivingState(route_progress_m=2, speed_mps=30. / 3.6 + 1.)):
             result = compute_reward(start, (0, 0), violation)
             self.assertEqual(result.components["progress"], 0)
 
@@ -405,9 +413,11 @@ def test_lane_reward_penalizes_offset_beyond_tolerance_and_heading_error():
 
 @pytest.mark.parametrize("signal", ["red", "yellow"])
 @pytest.mark.parametrize("buffer", [1., 2.])
-def test_signal_wait_area_agrees_with_target_hold_and_imitation(signal, buffer):
+def test_supervisor_holds_only_inside_the_accepted_wait_area(signal, buffer):
+    # Regression (experiment_28 eval4/eval7): the supervisor held at 2.495 m by vision,
+    # 2.524 m by the simulator, outside the accepted 2.5 m area, and the wait timed out.
     config = DrivingConfig(crossing_buffer_m=buffer)
-    fields = {signal + "_light": True, signal + "_light_distance_m": 2.5}
+    fields = {signal + "_light": True, signal + "_light_distance_m": SIGNAL_HOLD_AREA_M}
     if signal == "yellow":
         fields["yellow_light_confidence"] = 1.
     state = DrivingState(speed_mps=.1, speed_limit_mps=10., **fields)
@@ -417,6 +427,9 @@ def test_signal_wait_area_agrees_with_target_hold_and_imitation(signal, buffer):
     result = supervisor.step(state, (0., 1.), .05)
     assert result.target_speed_mps == 0. and result.action[1] == -1.
     assert supervisor.longitudinal_reference(state, .05) == -1.
+    margin = replace(state, **{signal + "_light_distance_m": 2.4})
+    assert signal_wait(margin, config)  # evaluation still accepts a wait here
+    assert compute_target_speed(margin, config) > 0.  # but the supervisor creeps closer
     outside = replace(state, **{signal + "_light_distance_m": 2.501})
     assert not signal_wait(outside, config)
     assert compute_target_speed(outside, config) > 0.
@@ -475,3 +488,54 @@ def test_heavy_rain_speed_loop_converges_without_repeated_brake_pulses(dt, initi
             assert abs(state.speed_mps - target) < .01
     assert abs(state.speed_mps - target) < .001
     assert max(abs(action) for action in settled_actions) < .01
+
+
+def test_pedestrian_conflict_stop_holds_until_stopped_and_clear():
+    # Regression (experiment_28 eval7): the conflict dropped out as the child left the
+    # front camera's path, the car re-accelerated to 12 m/s and hit the child.
+    config = DrivingConfig()
+    supervisor = SafetySupervisor(config)
+    moving = DrivingState(speed_mps=14., speed_limit_mps=16.7)
+    assert supervisor.step(replace(moving, pedestrian_conflict=True), (0., 1.), .05).action[1] == -1.
+    lost = supervisor.step(moving, (0., 1.), .05)  # conflict no longer seen, still moving
+    assert lost.action[1] == -1. and lost.target_speed_mps == 0.
+    assert "pedestrian_conflict_stop" in lost.intervention_reasons
+    stopped = replace(moving, speed_mps=0.)
+    steps = int(round(config.clear_dwell_s / .05))
+    for _ in range(steps - 1):
+        assert supervisor.step(stopped, (0., 1.), .05).action[1] == -1.
+    assert supervisor.step(stopped, (0., 1.), .05).action[1] > 0.  # clear long enough
+    # A conflict while stopped restarts the clear wait.
+    supervisor.step(replace(stopped, pedestrian_conflict=True), (0., 1.), .05)
+    assert supervisor.step(stopped, (0., 1.), .05).action[1] == -1.
+    supervisor.reset()
+    assert supervisor.step(moving, (0., 1.), .05).action[1] > -1.
+
+
+def test_pedestrian_lost_at_close_range_keeps_the_stop_longer():
+    # Regression (experiment_28 eval16 mixed_1): stopped 2 m from a child, the sensors lost
+    # it, the 0.75 s dwell ended and the car drove into the child.
+    config = DrivingConfig()
+    stopped = DrivingState(speed_mps=0., speed_limit_mps=16.7)
+
+    def seconds_until_release(front_m):
+        supervisor = SafetySupervisor(config)
+        supervisor.step(replace(stopped, pedestrian_conflict=True, front_hazard_m=front_m), (0., 1.), .05)
+        for step in range(1, 400):
+            if supervisor.step(stopped, (0., 1.), .05).action[1] > 0.:
+                return step * .05
+        raise AssertionError("never released")
+
+    assert seconds_until_release(2.4) == pytest.approx(config.pedestrian_close_clear_dwell_s, abs=.1)
+    assert seconds_until_release(12.) == pytest.approx(config.clear_dwell_s, abs=.1)
+
+
+@pytest.mark.parametrize("config", [DrivingConfig(), DrivingConfig(max_speed_mps=100.),
+                                    DrivingConfig(default_speed_mps=100.)])
+def test_supervisor_target_never_exceeds_65_kmh(config):
+    state = DrivingState(speed_mps=30., speed_limit_mps=120. / 3.6, speed_limit_confidence=1.)
+    cap = 65. / 3.6
+    assert compute_target_speed(state, config) == pytest.approx(cap)
+    result = SafetySupervisor(config).step(state, (0., 1.), .05)
+    assert result.target_speed_mps == pytest.approx(cap)
+    assert result.action[1] < 0  # 108 km/h is braked toward the cap

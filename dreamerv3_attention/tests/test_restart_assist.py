@@ -393,8 +393,25 @@ def test_signal_approach_assist_moves_a_car_stopped_far_from_a_red_light():
     assert driver.step(moving, (0., -.1), .05).action[1] > 0
 
 
+@pytest.mark.parametrize("distance", [3.6, 4.2, 4.7])
+def test_signal_approach_assist_moves_a_car_stalled_just_short_of_the_stop_area(distance):
+    # Experiment 28 (e.g. combined_8 6162/6171/6177): stopped 3.4-4.7 m short of
+    # a red, the 0.4-0.5 m/s creep target clipped throttle to ~0.2 and the car
+    # never reached the 2.5 m waiting area before the stationary timeout.
+    driver = supervisor()
+    for _ in range(15):
+        result = driver.step(far_red(distance), (0., .8), .05)
+    assert 0. < result.target_speed_mps <= .5
+    assert "signal_approach_assist" in result.intervention_reasons
+    assert result.action[1] == pytest.approx(DrivingConfig().restart_max_throttle)
+    # At the creep target the normal speed feedback takes over again.
+    at_target = replace(far_red(distance), speed_mps=result.target_speed_mps)
+    assert driver.step(at_target, (0., .8), .05).action[1] <= 0.
+
+
 @pytest.mark.parametrize("state", [
     far_red(1.5),                           # inside the stop area: hold the red
+    far_red(2.2),
     far_red(21., pedestrian_conflict=True),  # hard stop wins
     far_red(21., front_hazard_m=1.),
     far_red(21., observations_valid=False),

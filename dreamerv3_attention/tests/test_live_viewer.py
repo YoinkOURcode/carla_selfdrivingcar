@@ -39,6 +39,33 @@ def test_monitor_idle_discovery_explicit_run_and_publisher_lifetime(tmp_path):
     assert publisher.lock.closed
 
 
+def test_monitor_frame_follows_selected_run_and_finds_new_runs_despite_cache(tmp_path):
+    monitor = TrainingMonitor(root=tmp_path)
+    assert monitor.read()["status"] == "idle" and monitor.frame() is None
+    run = tmp_path / "run"
+    run.mkdir()
+    with LiveTraining(run, small_config(), "dreamer") as publisher:
+        publisher.write_frame(b"\xff\xd8frame")
+        assert monitor.read()["run"] == str(run.resolve())  # new run found despite the cached empty scan
+        assert monitor.frame() == b"\xff\xd8frame"
+
+
+def test_monitor_polls_only_the_shown_run_between_rescans(tmp_path):
+    cfg = small_config()
+    for index in range(8):  # many old runs, as in a long-lived runs/ directory
+        (tmp_path / f"old{index}").mkdir()
+        with LiveTraining(tmp_path / f"old{index}", cfg, "dreamer"):
+            pass
+    monitor = TrainingMonitor(root=tmp_path)
+    assert monitor.read()["run"]
+    parsed = []
+    original = monitor._states
+    monitor._states = lambda paths: parsed.append(list(paths)) or original(paths)
+    monitor.read()
+    monitor.read()
+    assert parsed == [[monitor.latest]] * 2
+
+
 def test_live_training_errors_and_corrupt_snapshot_do_not_look_active(tmp_path):
     with pytest.raises(RuntimeError, match="sensor failure"):
         with LiveTraining(tmp_path, small_config(), "dreamer"):
@@ -136,7 +163,10 @@ def test_trainer_publishes_real_episode_snapshots_through_budget_wrapper(tmp_pat
     assert len(terminals) == 2
     assert [s["metrics"]["episode"] for s in terminals] == [0, 1]
     assert all(s["distance_m"] == 6 and s["episode_return"] == 3 for s in terminals)
-    assert all(s["image"].startswith("data:image/jpeg;base64,") for s in terminals)
+    assert all(s["image"].startswith("/api/training/frame.jpg?v=") for s in terminals)
+    monitor = TrainingMonitor(tmp_path)
+    monitor.read()
+    assert monitor.frame().startswith(b"\xff\xd8")
     assert all(s["controls"]["throttle"] == .3 for s in terminals)
     assert all(s["route_start"] == 5 and s["route_end"] == 8 for s in terminals)
     final = TrainingMonitor(tmp_path).read()
@@ -193,7 +223,7 @@ def test_evaluation_publishes_scenario_resets_final_frames_and_completion(tmp_pa
     assert [state["metrics"]["episode"] for state in finals] == [0, 1]
     assert all(state["metrics"]["total_episodes"] == 2 for state in finals)
     assert all(state["distance_m"] == 6. and state["episode_return"] == 3. for state in finals)
-    assert all(state["image"].startswith("data:image/jpeg;base64,") for state in finals)
+    assert all(state["image"].startswith("/api/training/frame.jpg?v=") for state in finals)
     assert [state["route_start"] for state in finals] == [env.scenario["route_start"] for env in environments]
     final = TrainingMonitor(tmp_path).read()
     assert final["status"] == "ended" and not final["active"]

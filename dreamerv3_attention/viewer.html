@@ -110,7 +110,7 @@
   </main>
   <script>
     const $ = id => document.getElementById(id), number = (n,d=1) => Number.isFinite(n) ? n.toFixed(d) : '—';
-    let initialized = false, current = null, drawSequence = 0, lastFrame = null, pending = false, view = 'training';
+    let initialized = false, current = null, drawSequence = 0, lastFrame = null, lastObjects = null, lastRewards = null, pending = false, view = 'training';
     const learnerModeCache = {run:null, mode:null};
     function learnerModeText(s,m) {
       const run = s.run || null;
@@ -210,8 +210,11 @@
       }
       const missing=Object.entries(s.sensors_valid||{}).filter(([,v])=>!v).map(([k])=>k);
       $('safety').textContent=(s.interventions?.length ? 'Supervisor: '+s.interventions.join(', ') : 'No supervisor intervention')+(s.safety_events?.length?' · Safety events: '+s.safety_events.join(', '):'')+(Number.isFinite(s.lane_error_m)?' · Lane offset: '+number(s.lane_error_m,2)+' m':'')+(missing.length?' · Missing sensors: '+missing.join(', '):'');
-      const frameKey=JSON.stringify([view,s.run,s.metrics?.episode,s.frame,s.image!=null]);
-      renderRewards(s);renderObjects(s);if(frameKey!==lastFrame||!s.image){lastFrame=frameKey;draw(s);}
+      const frameKey=JSON.stringify([view,s.run,s.metrics?.episode,s.frame,s.image]);
+      const objectsKey=JSON.stringify([s.objects,s.traffic_signal,s.attention_enabled]),rewardsKey=JSON.stringify([s.reward_breakdown,s.episode_return]);
+      if(rewardsKey!==lastRewards){lastRewards=rewardsKey;renderRewards(s);}
+      if(objectsKey!==lastObjects){lastObjects=objectsKey;renderObjects(s);}
+      if(frameKey!==lastFrame||!s.image){lastFrame=frameKey;draw(s);}
     }
     async function command(path,body={}){
       pending=true;$('drive').disabled=true;
@@ -223,7 +226,7 @@
     function selectMode(mode){view=mode;lastFrame=null;++drawSequence;$('trainingPanel').hidden=mode!=='training';$('drivePanel').hidden=mode==='training';$('title').textContent=mode==='training'?'Live run':'Live drive';$('trainingMode').setAttribute('aria-pressed',String(mode==='training'));$('driveMode').setAttribute('aria-pressed',String(mode==='drive'));render({status:'connecting',message:'Connecting to the feed…'});poll();}
     $('trainingMode').onclick=()=>selectMode('training');$('driveMode').onclick=()=>selectMode('drive');
     async function poll(){const requested=view;try{const response=await fetch(requested==='training'?'/api/training':'/api/state',{cache:'no-store'});if(!response.ok)throw new Error('Viewer unavailable');const state=await response.json();if(view===requested)render(state);}catch(e){if(view!==requested)return;$('status').textContent='Disconnected';$('drive').disabled=true;$('stop').disabled=true;$('freshness').textContent='Connection lost · Displayed frame is no longer live.';$('message').textContent='Viewer connection lost. Check the server terminal.';}}
-    async function loop(){await poll();setTimeout(loop,200);}loop();
+    async function loop(){const started=performance.now();await poll();setTimeout(loop,Math.max(0,100-(performance.now()-started)));}loop();
   </script>
 </body>
 </html>

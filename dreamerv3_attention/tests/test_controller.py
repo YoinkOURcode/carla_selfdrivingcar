@@ -338,3 +338,17 @@ def test_creep_lets_a_stopped_car_leave_a_static_hazard_but_not_a_vehicle_or_ped
         result = SafetySupervisor(DrivingConfig(creep_speed_mps=1.)).step(
             DrivingState(**{**base, **override}), (.5, 1.), .05)
         assert result.action[1] < 0, override
+
+
+@pytest.mark.parametrize("token", [-2., -3.])
+def test_signal_rows_are_not_treated_as_vehicles_ahead(token):
+    def with_row(kind):
+        obs = observation(speed=8.)
+        obs["tokens"] = np.vstack((obs["tokens"], np.zeros((1, 16), np.float32)))
+        obs["mask"] = np.ones(6, dtype=bool)
+        obs["tokens"][5, [0, 8, 15]] = [.10, 1., kind]
+        return obs
+    controller = RouteController()
+    clear = controller.act(observation(speed=8.), None)[0][1]
+    assert controller.act(with_row(token), None)[0][1] == pytest.approx(clear)
+    assert controller.act(with_row(0.), None)[0][1] < clear

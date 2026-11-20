@@ -48,7 +48,7 @@ def launch_command(editor, project, arguments):
                "-RenderOffScreen", f"-carla-rpc-port={ports['rpc']}",
                f"-carla-streaming-port={ports['streaming']}",
                f"-carla-secondary-port={ports['secondary']}", "-quality-level=Epic",
-               "-carla-rgb-only", "-nosound", "-unattended", "-log", *remaining]
+               "-nosound", "-unattended", "-log", *remaining]
     return command, ports
 
 

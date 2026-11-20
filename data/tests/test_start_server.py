@@ -104,12 +104,15 @@ def test_launcher_refuses_busy_port_before_starting_editor(tmp_path, ports):
     assert not record.exists()
 
 
-def test_launcher_exec_preserves_arguments_and_editor_failure(tmp_path, ports):
+@pytest.mark.parametrize("rgb_only", [False, True])
+def test_launcher_exec_preserves_arguments_and_editor_failure(tmp_path, ports, rgb_only):
     script, record, environment = fake_project(tmp_path)
     result = subprocess.run(["bash", str(script),
-        *(f"-carla-{name}-port={port}" for name, port in ports.items()), "-nosplash"],
+        *(f"-carla-{name}-port={port}" for name, port in ports.items()),
+        *(["-carla-rgb-only"] if rgb_only else []), "-nosplash"],
         env=environment, capture_output=True, text=True)
     assert result.returncode == 7
     command = json.loads(record.read_text())
-    assert "-game" in command and "-carla-rgb-only" in command and command[-1] == "-nosplash"
+    assert "-game" in command and command[-1] == "-nosplash"
+    assert command.count("-carla-rgb-only") == int(rgb_only)
     assert all(f"-carla-{name}-port={port}" in command for name, port in ports.items())

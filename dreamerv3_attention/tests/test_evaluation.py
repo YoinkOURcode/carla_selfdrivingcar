@@ -349,3 +349,59 @@ class EvaluationAndComparisonTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PolicyInputTraceTests(unittest.TestCase):
+    def test_trace_records_inputs_the_action_was_computed_from(self):
+        import os
+        from unittest import mock
+
+        import numpy as np
+
+        def observation(step):
+            tokens = np.zeros((4, 16), np.float32)
+            tokens[0, 3], tokens[0, 4] = .1*step, .05  # lane 0.4*step m, heading 0.05*pi rad
+            tokens[1:4, :2] = [[.05, .01*step], [.15, 0.], [.3, 0.]]
+            return {"tokens": tokens, "mask": np.ones(4, bool)}
+
+        class Provider:
+            lane_debug = None
+
+        class FakeEnv:
+            def __init__(self, cfg, scenario):
+                self.steps, self.provider = 0, Provider()
+
+            def reset(self):
+                self.provider.lane_debug = {"source": "vision", "step": 0}
+                return observation(0)
+
+            def step(self, action):
+                self.steps += 1
+                self.provider.lane_debug = {"source": "held", "step": self.steps}
+                return observation(self.steps), 0., self.steps == 2, False, {
+                    "frame": self.steps, "timestamp": self.steps*.1, "speed_mps": 1.,
+                    "applied_action": action}
+
+            def close(self):
+                pass
+
+        class Wrapper:  # same shape as BudgetEnv
+            def __init__(self, cfg, scenario):
+                self.env = FakeEnv(cfg, scenario)
+                self.reset, self.step, self.close = self.env.reset, self.env.step, self.env.close
+
+        agent = type("Agent", (), {"initial": lambda self: 0,
+                                   "act": lambda self, obs, carry, det: ([0., .1], carry)})()
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"EVAL_SAVE_OBSERVATIONS": "1"}):
+            trace = Path(tmp) / "trace.jsonl"
+            evaluate(Config(split="train"), agent, Wrapper, episodes=1, trace_path=trace)
+            rows = [json.loads(line)["policy_input"] for line in trace.read_text().splitlines()]
+            saved = np.load(Path(tmp) / "observations_000.npz")
+            self.assertEqual(saved["tokens"].shape, (2, 4, 16))
+            self.assertEqual(saved["frame"].tolist(), [1, 2])
+            self.assertAlmostEqual(saved["tokens"][1, 0, 3], .1)
+        # Row 2's action was computed from the observation returned by step 1.
+        self.assertEqual([row["lane"]["step"] for row in rows], [0, 1])
+        self.assertAlmostEqual(rows[1]["lane_error_m"], .4, places=5)
+        self.assertAlmostEqual(rows[0]["heading_error_rad"], .05*np.pi, places=5)
+        self.assertAlmostEqual(rows[1]["navigation_ego_m"][0][1], 1., places=3)

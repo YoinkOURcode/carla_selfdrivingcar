@@ -4,6 +4,7 @@ from dataclasses import asdict, is_dataclass, replace
 import copy
 import json
 import math
+import os
 from pathlib import Path
 import time
 from typing import Any, Dict, Iterable, List, Optional
@@ -356,6 +357,16 @@ def _attention_weights(agent):
     return None if weights is None else weights.detach().cpu().numpy().reshape(-1)
 
 
+def _policy_input(observation, env):
+    """Lane, heading and navigation points the policy acted on, plus the provider's lane evidence."""
+    import numpy as np
+
+    tokens = np.asarray(observation["tokens"], dtype=float)
+    return {"lane_error_m": float(tokens[0, 3]*4.), "heading_error_rad": float(tokens[0, 4]*math.pi),
+            "navigation_ego_m": np.round(tokens[1:4, :2]*100., 3).tolist(),
+            "lane": getattr(getattr(getattr(env, "env", env), "provider", None), "lane_debug", None)}
+
+
 def evaluate(cfg, agent, env_factory=None, episodes: Optional[int] = None,
              deterministic: bool = True, *, fixed_scenario=False, trace_path=None, observer=None,
              action_source="actor") -> dict:
@@ -408,7 +419,12 @@ def evaluate(cfg, agent, env_factory=None, episodes: Optional[int] = None,
             infos = []
             shown = None
             terminated = truncated = False
+            # Opt-in: keep every token observation for open-loop replay of the policy.
+            saved = [] if trace_path is not None and os.environ.get("EVAL_SAVE_OBSERVATIONS") == "1" else None
             while not (terminated or truncated):
+                policy_input = _policy_input(observation, env) if trace_path is not None else None
+                if saved is not None:
+                    saved.append((observation["tokens"], observation["mask"]))
                 inference_started = time.perf_counter()
                 action, carry = agent.act(observation, carry, deterministic)
                 inference_latency = time.perf_counter() - inference_started
@@ -421,6 +437,8 @@ def evaluate(cfg, agent, env_factory=None, episodes: Optional[int] = None,
                 observation, reward, terminated, truncated, info = env.step(action)
                 info = dict(info)
                 info["policy_inference_latency_s"] = inference_latency
+                if policy_input is not None:
+                    info["policy_input"] = policy_input
                 info["attention"] = None if attention is None else attention.tolist()
                 if hasattr(carry, "set"):
                     import torch
@@ -442,6 +460,13 @@ def evaluate(cfg, agent, env_factory=None, episodes: Optional[int] = None,
                         trace.write(json.dumps({"scenario": scenario["name"], **info}, allow_nan=False) + "\n")
             if observer is not None and shown is not None:
                 observer.publish(env, observation, shown, attention_enabled=policy_attention)
+            if saved:
+                import numpy as np
+
+                np.savez_compressed(Path(trace_path).with_name(f"observations_{episode:03d}.npz"),
+                                    tokens=np.stack([t for t, _ in saved]), mask=np.stack([m for _, m in saved]),
+                                    frame=np.asarray([row["frame"] for row in infos]),
+                                    applied_action=np.asarray([row.get("applied_action", [0., 0.]) for row in infos]))
             metrics = episode_metrics(infos, cfg.dt)
             metrics["stopped_fraction"] = sum(row.get("speed_mps", 0.) < 0.1 for row in infos) / max(1, len(infos))
             metrics["action_override_fraction"] = sum(
