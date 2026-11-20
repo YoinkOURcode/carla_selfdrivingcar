@@ -177,70 +177,79 @@ Create the target folder on the VM:
 mkdir -p ~/carla_selfdrivingcar/final/reports
 ```
 
-The OneDrive folder is called `CVDL CARLA SUBMISSION`. Put each file in this
-slot (paths on the VM are relative to `~/carla_selfdrivingcar`):
+The OneDrive folder is called `CVDL CARLA SUBMISSION`. The deployment runs the
+trained model on the held-out Town02 scenarios with the camera vision models.
+Put each file in this slot (paths on the VM are relative to
+`~/carla_selfdrivingcar`):
 
 | OneDrive file | Slot on the VM | Used by |
 | --- | --- | --- |
 | `models/rl/latest.pt` (6.9 GB, the trained driving model) | `final/latest.pt` | `infer`, `evaluate`, `viewer` |
-| `models/rl/config.json` (the same run's configuration) | `final/config.json` | `infer`, `viewer`, map loader |
-| `evaluation/town02_final.json` (held-out Town02 evaluation configuration) | `final/evaluation.json` | `evaluate` |
-| `evaluation/result.json`, `evaluation/trace.jsonl`, `models/rl/result.json`, `models/rl/metrics.jsonl` | `final/reports/` | Reference results only; not read by the code |
+| `evaluation/town02_final.json` (held-out Town02 configuration) | `final/evaluation.json` | `infer`, `evaluate`, and the viewer configuration below |
+| `evaluation/result.json`, `evaluation/trace.jsonl`, `models/rl/config.json`, `models/rl/result.json`, `models/rl/metrics.jsonl` | `final/reports/` | Reference only; not read by the code |
 | `models/perception/yolo26n_carla_best.pt` | Not needed | Same file as `perception/carla_yolo26_demo_results/mac_demo/best.pt` in the clone |
 | `dataset/`, `videos/` | Not needed | Training data and demo videos, for reference |
 
-Rules:
+`models/rl/config.json` is the Town01 training configuration. It is kept for
+reference and is only needed to train again (section 13).
 
-- Never mix a checkpoint with a configuration from another run. Different
-  observation or model sizes fail to load.
-- After copying, check where the configuration expects its scenario file and
-  that the file is there:
+Copy from your laptop with `scp` (run on your laptop, inside the downloaded
+`CVDL CARLA SUBMISSION` folder):
+
+```bash
+scp models/rl/latest.pt carla@VM_IP:~/carla_selfdrivingcar/final/
+scp evaluation/town02_final.json carla@VM_IP:~/carla_selfdrivingcar/final/evaluation.json
+scp evaluation/result.json evaluation/trace.jsonl models/rl/config.json carla@VM_IP:~/carla_selfdrivingcar/final/reports/
+```
+
+### Put the scenario file where the configuration expects it
+
+`final/evaluation.json` reads its six scenarios (routes, weather, pedestrian
+and vehicle encounters) from `runs/experiment_28/evaluation/scenarios.json`.
+That file is in this repository as `deployment/town02_scenarios.json`, rebuilt
+exactly from the scenario records in the evaluation's `result.json`. Copy it
+into place:
 
 ```bash
 cd ~/carla_selfdrivingcar
-grep -n '"scenario_file"\|"town"\|"perception"\|"provider"\|"device"' final/config.json final/evaluation.json
+mkdir -p runs/experiment_28/evaluation
+cp deployment/town02_scenarios.json runs/experiment_28/evaluation/scenarios.json
 ```
 
-  An empty `scenario_file` uses the built-in scenarios. Any other path must exist
-  relative to `~/carla_selfdrivingcar`. `runs/` is not in GitHub, so any
-  scenario file the configuration names must come from the OneDrive folder and be
-  placed at exactly that path.
+### Make the viewer configuration
 
-Copy from your laptop with `scp` (run on your laptop, inside the downloaded `CVDL CARLA SUBMISSION` folder):
+The viewer drives one scenario at a time, so it needs a copy of the
+configuration with a single scenario selected:
 
 ```bash
-scp models/rl/latest.pt models/rl/config.json carla@VM_IP:~/carla_selfdrivingcar/final/
-scp evaluation/town02_final.json carla@VM_IP:~/carla_selfdrivingcar/final/evaluation.json
-scp evaluation/result.json evaluation/trace.jsonl carla@VM_IP:~/carla_selfdrivingcar/final/reports/
-```
-
-### Make sure the configuration uses the vision models
-
-The agent only uses the cameras and the vision models when the configuration
-says so. Without these two fields it falls back to simulator ground truth:
-
-```json
-"perception": "external",
-"provider": "dreamerv3_attention.vision:VisionPerceptionProvider"
-```
-
-Also set `"device": "cuda"`. If the `grep` above shows other values, set them
-with:
-
-```bash
+cd ~/carla_selfdrivingcar
+source venv/bin/activate
 python - <<'PY'
 import json
 from pathlib import Path
-for name in ("final/config.json", "final/evaluation.json"):
-    path = Path(name)
-    if path.exists():
-        cfg = json.loads(path.read_text())
-        cfg.update(perception="external", device="cuda",
-                   provider="dreamerv3_attention.vision:VisionPerceptionProvider")
-        path.write_text(json.dumps(cfg, indent=2) + "\n")
-        print("updated", name)
+SCENARIO = "held_out_long_mixed_1"
+cfg = json.loads(Path("final/evaluation.json").read_text())
+assert cfg["perception"] == "external" and cfg["device"] == "cuda", "not the vision configuration"
+cfg["scenarios"] = [SCENARIO]
+Path("final/viewer.json").write_text(json.dumps(cfg, indent=2) + "\n")
+print("final/viewer.json uses", SCENARIO, "on", cfg["town"])
 PY
 ```
+
+To show another scenario, change `SCENARIO` and run it again:
+
+| Scenario | Weather | Encounters |
+| --- | --- | --- |
+| `held_out_long_mixed_1` | Clear noon | 2 adults, 2 children |
+| `held_out_long_mixed_2` | Wet sunset | 2 adults, 2 children, 2 vehicles |
+| `held_out_long_mixed_3` | Soft rain noon | 2 adults, 1 child |
+| `held_out_long_mixed_4` | Cloudy noon with fog | 2 adults, 2 children, 2 vehicles |
+| `held_out_long_mixed_5` | Clear night | 1 adult, 2 children |
+| `held_out_long_mixed_6` | Hard rain night with fog | 2 adults, 2 children, 2 vehicles |
+
+The configuration already uses the camera vision models
+(`"perception": "external"` with `dreamerv3_attention.vision:VisionPerceptionProvider`)
+on `cuda`; the script stops if it does not.
 
 ## 7. Check the install without the simulator
 
@@ -273,8 +282,8 @@ cd ~/carla-0.9.16
   Reattach later with `tmux attach -t carla`.
 - These are the same flags the project uses when it launches its own server.
 
-Load the map the run needs. Training configurations use Town01, and the held-out
-evaluation uses Town02. The agent does not switch maps itself; it stops with
+Load the map the run needs. The deployment configurations use Town02; only
+training a new model (section 13) uses Town01. The agent does not switch maps itself; it stops with
 `Expected Town01; launch that map on a dedicated server first` if the wrong map
 is loaded.
 
@@ -284,7 +293,7 @@ source venv/bin/activate
 python PythonAPI/util/config.py --host 127.0.0.1 -p 2000 -m Town02
 ```
 
-Check the town your configuration expects with `grep '"town"' final/config.json`.
+Check the town a configuration expects with `grep '"town"' final/evaluation.json`.
 
 ## 9. Run the agent
 
@@ -294,11 +303,11 @@ live run can use the machine at a time.
 
 ### One episode with the downloaded model
 
-Load the map named in `final/config.json` first (step 8), then:
+Load Town02 first (step 8), then:
 
 ```bash
 python -m dreamerv3_attention infer \
-  --config final/config.json \
+  --config final/evaluation.json \
   --checkpoint final/latest.pt \
   --budget-seconds 300 --output runs/cloud_infer_01
 ```
@@ -343,7 +352,7 @@ another run:
 
 ```bash
 python -m dreamerv3_attention viewer \
-  --config final/config.json \
+  --config final/viewer.json \
   --checkpoint final/latest.pt --budget-seconds 300
 ```
 
@@ -361,7 +370,8 @@ Pick a destination and click **Start drive**.
 | `time-out of 10000ms while waiting for the simulator` | Server still loading or not running; check `tmux attach -t carla` |
 | `Another CARLA training workload holds the machine lock` | A second live run was started; wait for the first one or stop it |
 | `Output already exists` | Choose a new `--output` folder or run name |
-| Checkpoint fails to load with a size mismatch | `latest.pt` and `config.json` are from different runs (step 6) |
+| Checkpoint fails to load with a size mismatch | `latest.pt` and the configuration are from different runs (step 6) |
+| `FileNotFoundError` for `runs/experiment_28/evaluation/scenarios.json` | The scenario file was not copied into place (step 6) |
 | `torch.cuda.is_available()` is `False` | Driver problem; reinstall the driver (step 2.2) and reboot |
 | `ImportError: libGL.so.1` | `sudo apt install -y libgl1 libglib2.0-0` |
 | Viewer page does not load on the laptop | SSH tunnel not open, or opened to the public IP instead of `127.0.0.1:8080` |
@@ -404,14 +414,14 @@ UNIT
 ```
 
 Map loader. It waits for the server, then loads the town named in
-`final/config.json`, so the map always matches the model's configuration:
+`final/viewer.json`, so the map always matches the viewer's configuration:
 
 ```bash
 sudo tee /usr/local/bin/carla-load-map >/dev/null <<'SCRIPT'
 #!/bin/bash
 # Wait for the CARLA server and load the town named in the model configuration
 cd /home/carla/carla_selfdrivingcar || exit 1
-TOWN=$(venv/bin/python -c 'import json; print(json.load(open("final/config.json"))["town"])') || exit 1
+TOWN=$(venv/bin/python -c 'import json; print(json.load(open("final/viewer.json"))["town"])') || exit 1
 for attempt in $(seq 1 60); do
     venv/bin/python PythonAPI/util/config.py --host 127.0.0.1 -p 2000 -m "$TOWN" && exit 0
     sleep 5
@@ -451,7 +461,7 @@ Requires=carla-map.service
 [Service]
 User=carla
 WorkingDirectory=/home/carla/carla_selfdrivingcar
-ExecStart=/home/carla/carla_selfdrivingcar/venv/bin/python -m dreamerv3_attention viewer --config final/config.json --checkpoint final/latest.pt --budget-seconds 600
+ExecStart=/home/carla/carla_selfdrivingcar/venv/bin/python -m dreamerv3_attention viewer --config final/viewer.json --checkpoint final/latest.pt --budget-seconds 600
 Restart=on-failure
 RestartSec=10
 
@@ -537,7 +547,7 @@ viewer can start drives.
 | A service is `failed` | `journalctl -u carla -u carla-map -u carla-viewer -b --no-pager \| tail -50` |
 | `carla-map` failed after 5 minutes | CARLA did not finish loading; check `journalctl -u carla -b`, then `sudo systemctl restart carla-map carla-viewer` |
 | Viewer page loads but **Start drive** reports another workload | An evaluation or `infer` run is still going; wait for it or stop it |
-| Viewer reports the wrong town | `final/config.json` was changed after boot; `sudo systemctl restart carla-map carla-viewer` |
+| Viewer reports the wrong town | `final/viewer.json` was changed after boot; `sudo systemctl restart carla-map carla-viewer` |
 
 ## 13. Train a new model and other tools
 

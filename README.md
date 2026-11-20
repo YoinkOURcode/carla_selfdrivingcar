@@ -124,11 +124,22 @@ Evaluation suite: held-out Town02 (`evaluation/town02_final.json` in the OneDriv
 folder), never used in training. The final model passed 6 of 6 scenarios. Full
 reports: `evaluation/` in the OneDrive folder.
 
-| Scenario | Route completion | Collisions | Red-light violations | Pedestrian incidents | Lane departures | Supervisor interventions |
-| --- | --- | --- | --- | --- | --- | --- |
-| [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] | [PLACEHOLDER] |
+| Scenario | Weather | Result | Route completion | Distance | Collisions | Pedestrian incidents | Red-light violations | Lane departures | Speeding events | Supervisor modified actions |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | Clear noon | Success | 99.3% | 423 m | 0 | 0 | 0 | 0 | 1 (0.5 s) | 56% |
+| 2 | Wet sunset | Success | 99.5% | 501 m | 0 | 0 | 0 | 0 | 1 (0.9 s) | 86% |
+| 3 | Soft rain noon | Success | 99.5% | 480 m | 0 | 0 | 0 | 0 | 2 (1.2 s) | 64% |
+| 4 | Cloudy noon, fog | Success | 99.4% | 459 m | 0 | 0 | 0 | 0 | 2 (1.3 s) | 72% |
+| 5 | Clear night | Success | 99.4% | 482 m | 0 | 0 | 0 | 0 | 2 (1.8 s) | 63% |
+| 6 | Hard rain night, fog | Success | 99.5% | 553 m | 0 | 0 | 0 | 0 | 1 (0.9 s) | 83% |
 
-[PLACEHOLDER: one row per scenario from the final result.json files]
+Each route is 400 to 700 m of Town02 with signalised junctions and scripted
+adult, child and vehicle encounters. The agent completed all six with no
+collisions, pedestrian incidents, red-light violations or lane departures; the
+only recorded violations are brief speeding events, 0.5 to 1.8 seconds per
+route. The safety supervisor modified 56% to 86% of the agent's actions, mostly
+by limiting throttle to the target speed and braking for it, so these results
+describe the agent and supervisor together, not the policy alone.
 
 ### Detection (Round 2 validation, AP50, before merging duplicate boxes)
 
@@ -211,6 +222,7 @@ its time per frame against PyTorch on the same machine]; the joint road model ta
 | `dreamerv3_attention/` | This project | Sensors, perception provider (`vision.py`), agent, training, evaluation, viewer, tests |
 | `data/` | This project | Dataset capture and server checks |
 | `SETUP_LINUX.md` | This project | Full install guide |
+| `deployment/` | This project | Held-out Town02 scenario file used by the deployment (SETUP_LINUX.md section 6) |
 | `VISION_INTEGRATION.md` | This project | How camera perception feeds the agent, and known gaps |
 | `PythonAPI/`, `LibCarla/`, `Unreal/`, `Util/`, `Docs/`, others | CARLA upstream | Simulator source, unchanged except where noted in `VISION_INTEGRATION.md` |
 
