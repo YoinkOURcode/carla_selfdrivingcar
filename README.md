@@ -12,16 +12,12 @@ OneDrive folder from the project owner; no public download URL is configured
 in this repository. Download the checkpoint together with its matching
 `config.json`, scenario files and evaluation reports, preserving relative paths.
 
-The project identifies `experiment_26` as its strongest curriculum experiment.
-Reported capabilities include wet-weather driving and handling traffic lights,
-vehicles and pedestrians; consistent turning remains a limitation because of
-policy degradation. Use the OneDrive reports to assess the actual checkpoint,
+Use the OneDrive reports to assess the actual checkpoint,
 scenario coverage and results. This guide does not establish a new performance
 score or an attention improvement.
 
 For the examples below, put the chosen model and its matching configuration in
-`runs/onedrive_model/latest.pt` and `runs/onedrive_model/config.json`. These are
-example local paths, not filenames guaranteed by the OneDrive share. Preserve
+`final/latest.pt` and `final/config.json`. Preserve
 any additional paths referenced by the downloaded configuration. Do not mix
 checkpoints and configurations with different observation or model dimensions.
 
@@ -30,24 +26,13 @@ checkpoints and configurations with different observation or model dimensions.
 | Path | Purpose |
 | --- | --- |
 | `dreamerv3_attention/` | Sensors, observation tokens, attention/RSSM, training, evaluation and web viewer |
-| `dreamerv3_attention/configs/` | Tracked attention, baseline, evaluation and CPU smoke configurations |
+| `dreamerv3_attention/configs/` | Baseline config files. Do not use these, use the configs in OneDrive instead |
 | `perception/` | YOLO object and traffic-light detection, browser demo and live depth tools |
 | `joint_road_model/` | Lane-paint segmentation, crossing detection and lane-centre geometry |
 | `data/` | Dataset collection, configuration and simulator preflight utilities |
 | `PythonAPI/`, `LibCarla/`, `Unreal/` | CARLA bindings, native library and simulator project |
-| `runs/` | Local training/evaluation outputs and downloaded experiment artifacts |
 | `requirements.txt` | Consolidated Python dependencies for the project code and demos |
 
-The root `.gitignore` excludes `runs/`, `*.pt`, `*.pth`, `*.ckpt`, `*.jsonl`,
-`data/dataset`, archives, build products, shared libraries, caches and local
-environment files. It also excludes `*.sh`, most `*.md` (with a `README.md`
-exception), and the legacy `world_model_rl/` folder. Nested ignore files also
-exclude local datasets, virtual environments and demo outputs.
-**Ignore rules do not remove files already tracked by Git**: for example, the
-joint road package has tracked model/metric assets despite these patterns.
-Do not assume every local artifact or helper script will arrive in a clone.
-The strongest driving checkpoint and experiment evaluation bundle still come
-from OneDrive separately. Never rely on the ignored legacy package for setup.
 
 ## Prerequisites and installation
 
@@ -106,10 +91,9 @@ Start an idle dedicated CARLA server with Town01, normally on RPC port 2000
 (with ports 2001 and 2002 also available). With a source-built engine, add
 `--ue4-root /path/to/UnrealEngine_4.26` to a live command to let it launch and
 clean up its own server. Without that flag, it connects to an existing server.
-The local `data/start_server.sh` helper is ignored and may be absent from a
-fresh clone; it is not required by these commands.
 
-The tracked `attention.json` enables attention and uses CUDA; `baseline.json`
+This step is only necessary when starting a fresh training, otherwise use the model and configs from OneDrive.
+The baseline `attention.json` enables attention and uses CUDA; `baseline.json`
 disables attention for comparison. Copy a configuration and set `device` to
 `cpu` if needed. Configure host, port, town and perception there. Every live
 command needs `--budget-seconds` between 1 and 86400, including startup time.
@@ -136,12 +120,12 @@ Run the downloaded policy for one episode:
 
 ```bash
 python -m dreamerv3_attention infer \
-  --config runs/onedrive_model/config.json \
-  --checkpoint runs/onedrive_model/latest.pt \
+  --config runs/example/config.json \
+  --checkpoint runs/example/latest.pt \
   --budget-seconds 180 --output runs/onedrive_infer
 ```
 
-For evaluation, create `runs/onedrive_model/evaluation.json` from the matching
+For evaluation, create `runs/example/evaluation.json` from the matching
 model configuration, retaining its model/perception settings and selecting the
 intended validation or held-out suite. The tracked `configs/evaluation.json`
 is a starting point only when its model settings match the checkpoint.
@@ -150,11 +134,11 @@ results. Compare actor and controller on identical scenarios and safety settings
 
 ```bash
 python -m dreamerv3_attention evaluate \
-  --config runs/onedrive_model/evaluation.json \
-  --checkpoint runs/onedrive_model/latest.pt \
+  --config runs/example/evaluation.json \
+  --checkpoint runs/example/latest.pt \
   --budget-seconds 600 --output runs/actor_eval
 python -m dreamerv3_attention evaluate \
-  --config runs/onedrive_model/evaluation.json --controller \
+  --config runs/example/evaluation.json --controller \
   --budget-seconds 600 --output runs/controller_eval
 python -m dreamerv3_attention compare \
   --baseline runs/controller_eval/result.json \
@@ -188,8 +172,8 @@ For a separate interactive checkpoint drive on an idle server:
 
 ```bash
 python -m dreamerv3_attention viewer \
-  --config runs/onedrive_model/config.json \
-  --checkpoint runs/onedrive_model/latest.pt --budget-seconds 180
+  --config runs/example/config.json \
+  --checkpoint runs/example/latest.pt --budget-seconds 180
 ```
 
 Select a destination and click **Start drive**. Use a compatible single-case
