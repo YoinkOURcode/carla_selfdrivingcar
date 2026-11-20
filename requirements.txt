@@ -1,0 +1,16 @@
+# Project runtime and offline tests (Python 3.10; Linux for Dreamer).
+# CARLA upstream build/docs/integration requirements remain in their own folders.
+# Install a matching CUDA build of torch/torchvision separately when needed.
+torch==2.7.1
+torchvision==0.22.1
+torchrl==0.14.1
+tensordict==0.14.3
+numpy==1.26.4
+carla==0.9.16
+networkx>=2.6
+Pillow>=9
+opencv-python==4.11.0.86
+ultralytics==8.4.171
+rapidocr-onnxruntime==1.4.4
+Flask>=3,<4
+pytest>=7

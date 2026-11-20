@@ -12,7 +12,7 @@ macOS or Linux:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r ../requirements.txt
 .venv/bin/python demo.py --device mps
 ```
 
@@ -20,7 +20,7 @@ Windows:
 
 ```bash
 py -3.12 -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\pip install -r ..\requirements.txt
 .venv\Scripts\python demo.py --device cpu
 ```
 

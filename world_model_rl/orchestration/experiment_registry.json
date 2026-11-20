@@ -4591,6 +4591,22 @@
         "tensordict": "0.14.3",
         "carla": "0.9.16"
       }
+    },
+    {
+      "id": "eval24",
+      "path": "/home/kevinkoh/Projects/CVDL/Project/carla/runs/experiment_28/evaluation/eval24",
+      "algorithm": "torchrl-dreamerv3",
+      "purpose": "evaluate",
+      "budget_seconds": 86400.0,
+      "seed": 380000,
+      "attention": true,
+      "schema": "carla-dreamerv3-tokens-v2",
+      "versions": {
+        "torch": "2.7.1",
+        "torchrl": "0.14.1",
+        "tensordict": "0.14.3",
+        "carla": "0.9.16"
+      }
     }
   ]
 }
