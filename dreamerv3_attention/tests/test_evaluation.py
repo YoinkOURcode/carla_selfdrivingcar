@@ -395,7 +395,11 @@ class PolicyInputTraceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"EVAL_SAVE_OBSERVATIONS": "1"}):
             trace = Path(tmp) / "trace.jsonl"
             evaluate(Config(split="train"), agent, Wrapper, episodes=1, trace_path=trace)
-            rows = [json.loads(line)["policy_input"] for line in trace.read_text().splitlines()]
+            lines = [json.loads(line) for line in trace.read_text().splitlines()]
+            rows = [line["policy_input"] for line in lines]
+            # Episode and termination fields let dashboard.py summarize evaluation traces.
+            self.assertEqual({line["episode"] for line in lines}, {0})
+            self.assertEqual([line["terminated"] or line["truncated"] for line in lines], [False, True])
             saved = np.load(Path(tmp) / "observations_000.npz")
             self.assertEqual(saved["tokens"].shape, (2, 4, 16))
             self.assertEqual(saved["frame"].tolist(), [1, 2])

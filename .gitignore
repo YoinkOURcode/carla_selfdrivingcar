@@ -5,8 +5,6 @@ Deprecated/PythonClient/dist
 TrafficManager/build
 Util/Build
 Install
-Plugins
-!Unreal/CarlaUE4/Plugins
 Unreal/CarlaUE4/Plugins/Streetmap
 Unreal/CarlaUE4/Plugins/HoudiniEngine
 build/

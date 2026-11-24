@@ -11,6 +11,7 @@ import torch
 from dreamerv3_attention.driving import DrivingConfig, DrivingState, SafetySupervisor
 from dreamerv3_attention.observations import FrameBundle
 from dreamerv3_attention.sensors import SensorFrameBuffer
+from dreamerv3_attention.object_tracker import ObjectTracker
 from dreamerv3_attention.vision import VisionPerceptionProvider, merge_nested_lights, path_lane
 
 
@@ -406,8 +407,8 @@ def test_near_junction_lane_comes_from_planned_path_not_vision(low_confidence):
     assert fields["lane_error_m"] == pytest.approx(-.4)  # vision alone would report +0.7
     b.near_junction = False
     fields = make_provider().predict(b).driving
-    # Outside junctions a 1.1 m disagreement with the aligned route is a wrong line.
-    assert fields["lane_source"] == "route_aligned" and fields["lane_error_m"] == pytest.approx(-.4)
+    # Outside junctions vision is used; only a disagreement over 2 m rejects it.
+    assert fields["lane_source"] == "vision" and fields["lane_error_m"] == pytest.approx(.7)
     b.ego_path = np.array([[0., -.5], [10., -.5]])  # route agrees with vision within 0.5 m
     fields = make_provider().predict(b).driving
     assert fields["lane_source"] == "vision" and fields["lane_error_m"] == pytest.approx(.7)
@@ -460,8 +461,8 @@ def test_expired_lane_recovers_at_queue_speed_after_red_clears():
     provider.road = vision_road
     camera.timestamp += .05
     fields = provider.predict(camera).driving
-    # Vision (centred) is 0.8 m from the aligned route here, so the route is used; neither is capped.
-    assert fields["lane_source"] == "route_aligned"
+    # Vision is 0.8 m from the aligned route here and is still used; neither is capped.
+    assert fields["lane_source"] == "vision"
     assert supervisor.step(DrivingState(**fields), (0., 1.), .05).target_speed_mps > 1.5
     camera.ego_path = np.array([[0., 0.], [40., 0.]])
     camera.timestamp += .05
@@ -630,33 +631,30 @@ def road_from_points(points):
     return lambda _: dict(lane_center=dict(center_line=center_line, low_confidence=False), crosswalks=[])
 
 
-def test_aligned_route_replaces_wrong_vision_line_at_bend_entry():
-    # Regression (town_transfer E01, Town02 88->61 frame 378053, left bend entry): the
-    # captured centre line leans right (heading -0.27) while the planned path turns left
-    # (+0.68); the actor followed vision and collided at 249.9 m.
+def test_vision_line_is_used_when_route_disagrees_at_bend_entry():
+    # Captured at Town02 88->61 frame 378053 (town_transfer E01, left bend entry): the
+    # centre line leans right (heading -0.27) while the planned path turns left (+0.68).
+    # The route no longer overrides vision here; this case once ended in a collision.
     captured = [[9.161, 2.587], [8.195, 2.32], [7.446, 2.112], [6.848, 1.947], [6.359, 1.811], [5.773, 1.649]]
     provider, camera = make_provider(), bundle()
     provider.lane_hold_s = 2.
     provider.road = road_from_points(captured)
     heading = .68
     camera.ego_path = np.array([[0., -.37], [20.*math.cos(heading), -.37-20.*math.sin(heading)]])
-    route = path_lane(camera.ego_path)
     fields = provider.predict(camera).driving
     assert provider.lane_debug["fit"][1] == pytest.approx(-.27, abs=.01)
-    assert fields["lane_source"] == "route_aligned" and fields["observations_valid"]
-    assert (fields["lane_error_m"], fields["heading_error_rad"]) == pytest.approx(route)
-    # A wrong hold is replaced too: vision lost, the hold would carry the stale line.
-    provider._last_lane = (camera.timestamp, -.86, .13, route)
+    assert fields["lane_source"] == "vision" and fields["observations_valid"]
+    assert fields["heading_error_rad"] == pytest.approx(-.27, abs=.01)
+    # With vision lost, the hold carries the last estimate instead of the route.
     provider.road = lambda _: dict(lane_center=dict(center_line=[], low_confidence=True), crosswalks=[])
     camera.timestamp += .05
-    fields = provider.predict(camera).driving
-    assert provider.lane_debug["held"] is not None
-    assert fields["lane_source"] == "route_aligned"
+    assert provider.predict(camera).driving["lane_source"] == "held"
 
 
 def test_vision_agreeing_with_route_is_kept():
     # Straight before the captured jump (frame 377997): small offsets stay with vision.
     provider, camera = make_provider(), bundle()
+    provider.lane_hold_s = 2.
     provider.road = lane_road(.3)
     camera.ego_path = np.array([[0., 0.], [20., 0.]])
     fields = provider.predict(camera).driving
@@ -664,7 +662,10 @@ def test_vision_agreeing_with_route_is_kept():
     provider.road = lane_road(.98)  # captured 0.98 m jump against a centred route
     camera.timestamp += .05
     fields = provider.predict(camera).driving
-    assert fields["lane_source"] == "route_aligned" and fields["lane_error_m"] == pytest.approx(0., abs=1e-9)
+    assert fields["lane_source"] == "vision" and fields["lane_error_m"] == pytest.approx(.98)
+    provider.road = lane_road(2.3)  # over 2 m from the route: still rejected as a neighbouring lane
+    camera.timestamp += .05
+    assert provider.predict(camera).driving["lane_source"] == "held"
 
 
 @pytest.mark.parametrize("speed, spacing", [(22., 15.5), (22., 22.), (6., 15.5), (6., 22.)])
@@ -699,3 +700,30 @@ def test_sign_debug_reports_why_a_sign_was_not_read(monkeypatch):
     assert debug["detected"] == 1 and debug["reason"] == "ocr_failed" and debug["ocr_value"] is None
     assert 8. < debug["distance_m"] < 15. and debug["limit_kmh"] is None
     json.dumps(debug, allow_nan=False)
+
+
+def road_depth(scale):
+    """Depth image of a flat road seen by the test camera, scaled (scale != 1 tilts the road)."""
+    rows = np.arange(720, dtype=np.float32)[:, None]
+    flat = np.where(rows > 360., 640.*2.4/np.maximum(rows-359.5, 1e-3), 1000.)
+    return np.repeat(np.where(rows > 360., flat*scale, 1000.), 1280, axis=1).astype(np.float32)
+
+
+def test_lane_points_use_measured_depth_and_fall_back_off_the_road():
+    provider, camera = make_provider(), bundle()
+    camera.depth, camera.valid["depth"] = road_depth(.9), True
+    # Every lane pixel measures 0.9x the flat-road depth: points are 10% nearer and up to 0.24 m high.
+    assert provider.predict(camera).driving["lane_error_m"] == pytest.approx(.63, abs=.01)
+    # A car over the lane (depth 3 m) is not road, so those pixels use the flat-road projection.
+    camera.depth = np.full((720, 1280), 3., np.float32)
+    assert provider.predict(camera).driving["lane_error_m"] == pytest.approx(.7)
+
+
+def test_object_velocity_comes_from_tracked_depth():
+    provider, camera = make_provider((0,)), bundle()
+    provider.object_tracker = ObjectTracker()
+    camera.valid["depth"], camera.ego_pose = True, (0., 0., 0., 0.)
+    for i in range(6):  # a vehicle 20 m ahead closing at 10 m/s on a stationary ego
+        camera.timestamp, camera.depth = 2.1 + .05*i, np.full((720, 1280), 20. - .5*i, np.float32)
+        objects = provider.predict(camera).objects
+    np.testing.assert_allclose(objects[0, 3:6]*30., [-10., 0., 0.], atol=.01)
