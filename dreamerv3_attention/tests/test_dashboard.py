@@ -107,3 +107,42 @@ def test_rss_parameters_are_configurable():
                      {**d.RSS, "response_s": 0., "brake_min": 8.})
     # No response time and equal braking: same speed is exactly safe at any gap.
     assert d.rss_unsafe_steps(rows) == 0
+
+
+def test_old_evaluation_trace_directory_with_result_report(tmp_path):
+    # Traces before 2026-11-24: no episode/terminated/reward fields, only end reasons.
+    run = tmp_path/"evaluation"/"eval9"
+    run.mkdir(parents=True)
+    rows = []
+    for name, end in (("route_a", {"success": True}), ("route_b", {"termination_reason": "collision"}),
+                      ("route_c", {})):  # route_c was cut off mid-episode
+        for i in range(3):
+            rows.append({"scenario": name, "timestamp": .05*i, "speed_mps": 10., "route_length_m": 100.,
+                         "route_progress_m": float(i), "reward_components": {"progress": 1., "time": -.5},
+                         **(end if i == 2 else {})})
+    (run/"trace.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
+    report = lambda name, jerk: {"name": name, "metrics": {"jerk_rms_mps3": jerk, "speed_violation_events": 2}}
+    (run/"result.json").write_text(json.dumps({
+        "checkpoint": "/x/runs/experiment_28/postintegration_model/final/latest.pt", "policy": {"type": "actor"},
+        "episodes": [report("route_a", 80.), report("route_b", 90.)]}))
+
+    summary = d.summarize(run)
+    assert summary["name"] == "evaluation/eval9" and summary["kind"] == "evaluation"
+    assert summary["checkpoint"] == "postintegration_model/final"
+    assert summary["incomplete_episodes"] == 1
+    a, b = summary["episodes"]
+    assert (a["info"]["scenario"], b["info"]["scenario"]) == ("route_a", "route_b")
+    assert a["m"]["success"] == 100. and b["m"]["success"] == 0.
+    assert a["m"]["episode_return"] == pytest.approx(1.5)  # summed components
+    assert (a["m"]["report_jerk_rms_mps3"], b["m"]["report_jerk_rms_mps3"]) == (80., 90.)
+    assert a["info"]["source"] == "actor"
+
+
+def test_report_metrics_are_blank_for_training_runs(tmp_path):
+    path = tmp_path/"run"/"metrics.jsonl"
+    path.parent.mkdir()
+    path.write_text("\n".join(json.dumps({k: v for k, v in r.items() if not k.startswith("_")})
+                              for r in steps(3)))
+    summary = d.summarize(path)
+    assert summary["kind"] == "training" and summary["checkpoint"] is None
+    assert summary["episodes"][0]["m"]["report_jerk_rms_mps3"] is None

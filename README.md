@@ -182,15 +182,20 @@ configuration when viewing a named scenario.
 ## Compare runs
 
 ```bash
-python -m dreamerv3_attention.dashboard runs/A/metrics.jsonl runs/B/metrics.jsonl
+python -m dreamerv3_attention.dashboard                 # every run in runs/experiment_28/evaluation
+python -m dreamerv3_attention.dashboard runs/experiment_28/evaluation/eval24 runs/A/metrics.jsonl
 ```
 
-This writes one small summary per run to `runs/dashboard/`. Open
-`dreamerv3_attention/dashboard.html` in a browser and add the summaries. It
-shows CARLA Leaderboard-style driving score, reward components, safety
-supervisor interventions, and TTC/TET (`--ttc-threshold`, default 1.5 s), with
-filters and a two-metric explorer. To add a metric, add an `@metric` or
-`@breakdown` function in `dashboard.py`; the page picks it up automatically.
+This writes one small summary per run to `runs/dashboard/`. A run is an
+evaluation directory (`trace.jsonl`, plus `result.json` once finished) or a
+training `metrics.jsonl`. Open `dreamerv3_attention/dashboard.html` in a
+browser and add up to 8 summaries. It shows CARLA Leaderboard-style driving
+score, a per-scenario table, reward components, safety supervisor
+interventions, TTC/TET (`--ttc-threshold`, default 1.5 s), RSS safe distance and
+the evaluation report from `result.json` (speeding, unnecessary stops, comfort,
+latency), with filters and a two-metric explorer. To add a metric, add an
+`@metric` or `@breakdown` function in `dashboard.py`; the page picks it up
+automatically.
 
 ## Architecture: how it works
 

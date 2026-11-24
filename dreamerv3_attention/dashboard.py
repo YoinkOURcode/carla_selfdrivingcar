@@ -1,8 +1,11 @@
-"""Summarize training metrics.jsonl files into per-episode JSON for dashboard.html.
+"""Summarize evaluation runs (or training metrics.jsonl) into per-episode JSON for dashboard.html.
 
-    python -m dreamerv3_attention.dashboard runs/experiment_28/*/metrics.jsonl
+    python -m dreamerv3_attention.dashboard                     # every run in runs/experiment_28/evaluation
+    python -m dreamerv3_attention.dashboard runs/experiment_28/evaluation/eval24 runs/X/metrics.jsonl
 
-Each output file holds one run. Open dashboard.html in a browser and load them.
+A run is an evaluation directory (trace.jsonl, plus result.json when the run
+finished) or a metrics.jsonl file. Each output file holds one run. Open
+dashboard.html in a browser and load them.
 
 To add a metric, decorate a function of an episode's steps with @metric (one
 number) or @breakdown (a {category: number} dict). The dashboard builds its
@@ -30,6 +33,7 @@ HAZARD_JUMP_MPS = 40.  # faster range changes mean the front hazard switched obj
 # CARLA's RSS sensor defaults (LibCarla/source/carla/rss/RssCheck.cpp): response time,
 # ego acceleration during it, ego minimum braking, lead maximum braking.
 RSS = {"response_s": 1.0, "accel_max": 3.5, "brake_min": 4.0, "brake_max": 8.0}
+EVALUATIONS = Path("runs/experiment_28/evaluation")
 
 METRICS, BREAKDOWNS = [], []
 
@@ -309,7 +313,9 @@ def episode_end(steps):
 
 @metric("Episode return", "Episode", "")
 def episode_return(steps):
-    return sum(s.get("reward", 0.) for s in steps)
+    # Evaluation traces before 2026-11-24 have no reward field, only its components.
+    return sum(s["reward"] if "reward" in s else sum((s.get("reward_components") or {}).values())
+               for s in steps)
 
 
 @metric("Mean speed", "Episode", "m/s")
@@ -321,6 +327,36 @@ def mean_speed(steps):
 @metric("Episode length", "Episode", "s", better="none")
 def duration_s(steps):
     return sum(s["_dt"] for s in steps)
+
+
+# ---------------------------------------------------------------- evaluation report
+# Read from the evaluation's result.json (evaluation.py), so training runs leave them blank.
+
+REPORT = [  # (result.json key, label, unit, agg, better, note, scale)
+    ("speed_violation_events", "Speeding events", "/km", "per_km", "lower",
+     "Times speed rose above the posted limit."),
+    ("speed_excess_mean_mps", "Speed over the limit", "m/s", "mean", "lower",
+     "Average excess while speeding."),
+    ("unnecessary_stop_events", "Unnecessary stops", "/km", "per_km", "lower",
+     "Stops (under 0.5 m/s) with no red light, pedestrian conflict or crossing ahead. "
+     "Queueing behind a vehicle counts."),
+    ("unnecessary_stopping_s", "Unnecessary stopped time", "s", "mean", "lower", ""),
+    ("pedestrian_conflict_events", "Pedestrian conflicts", "/km", "per_km", "lower",
+     "Times a pedestrian entered the conflict zone ahead."),
+    ("minimum_relevant_separation_m", "Minimum separation", "m", "mean", "higher",
+     "Smallest front, side, rear or pedestrian gap in the episode."),
+    ("speed_tracking_error_mean_mps", "Speed tracking error", "m/s", "mean", "lower",
+     "Mean |speed − supervisor target speed|."),
+    ("acceleration_rms_mps2", "Acceleration RMS", "m/s²", "mean", "lower", ""),
+    ("jerk_rms_mps3", "Jerk RMS", "m/s³", "mean", "lower", ""),
+    ("policy_inference_latency_p95_s", "Policy latency (p95)", "ms", "mean", "lower", "", 1000.),
+]
+for _key, _label, _unit, _agg, _better, _note, *_scale in REPORT:
+    def _read(steps, key=_key, scale=(_scale or [1.])[0]):
+        value = (steps[0].get("_report") or {}).get(key)
+        return None if value is None else value*scale
+    _read.__name__ = f"report_{_key}"
+    metric(_label, "Evaluation report", _unit, _agg, _better, _note)(_read)
 
 
 # ---------------------------------------------------------------- summarizing
@@ -346,9 +382,24 @@ def _clean(value):
     return round(value, 6) if math.isfinite(value) else None
 
 
+def episode_ended(step):
+    if "terminated" in step:
+        return step["terminated"] or step.get("truncated")
+    # Evaluation traces before 2026-11-24 carry only the reasons.
+    return bool(step.get("termination_reason") or step.get("truncation_reason") or step.get("success"))
+
+
 def summarize(path, name=None, threshold_s=TTC_THRESHOLD_S, rss=RSS):
-    """Stream one metrics.jsonl; only complete episodes are kept."""
+    """Stream one run; only complete episodes are kept.
+
+    ``path`` is an evaluation directory or a metrics.jsonl/trace.jsonl file.
+    """
     path = Path(path)
+    if path.is_dir():
+        path = path/"trace.jsonl" if (path/"trace.jsonl").exists() else path/"metrics.jsonl"
+    result_path = path.parent/"result.json"
+    result = json.loads(result_path.read_text()) if result_path.exists() else {}
+    reports = result.get("episodes", [])
     rows, steps, incomplete = [], [], 0
     with path.open() as lines:
         for line in lines:
@@ -358,12 +409,19 @@ def summarize(path, name=None, threshold_s=TTC_THRESHOLD_S, rss=RSS):
             if steps and step.get("episode") != steps[-1].get("episode"):
                 incomplete += 1  # no terminal step: the run stopped or resumed mid-episode
                 steps = []
+            step.setdefault("action_source", (result.get("policy") or {}).get("type", "unknown"))
             steps.append(step)
-            if step.get("terminated") or step.get("truncated"):
+            if episode_ended(step):
+                report = reports[len(rows)] if len(rows) < len(reports) else None
+                if report and report.get("name") == step.get("scenario"):
+                    steps[0]["_report"] = report.get("metrics")
                 rows.append(summarize_episode(steps, threshold_s, rss))
                 steps = []
+    checkpoint = result.get("checkpoint")
     strip = lambda d: {k: v for k, v in d.items() if k != "fn"}
     return {"name": name or f"{path.parent.parent.name}/{path.parent.name}", "path": str(path),
+            "kind": "evaluation" if path.name == "trace.jsonl" else "training",
+            "checkpoint": "/".join(Path(checkpoint).parts[-3:-1]) if checkpoint else None,
             "ttc_threshold_s": threshold_s, "rss": rss, "incomplete_episodes": incomplete + bool(steps),
             "penalties": PENALTY, "metrics": [strip(m) for m in METRICS],
             "breakdowns": [strip(b) for b in BREAKDOWNS], "episodes": rows}
@@ -371,7 +429,8 @@ def summarize(path, name=None, threshold_s=TTC_THRESHOLD_S, rss=RSS):
 
 def main(argv=None):
     cli = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    cli.add_argument("paths", nargs="+", type=Path, help="metrics.jsonl files")
+    cli.add_argument("paths", nargs="*", type=Path,
+                     help=f"evaluation directories or metrics.jsonl files (default: every run in {EVALUATIONS})")
     cli.add_argument("-o", "--out", type=Path, default=Path("runs/dashboard"), help="output directory")
     cli.add_argument("--ttc-threshold", type=float, default=TTC_THRESHOLD_S, help="TET threshold in seconds")
     for key, value in RSS.items():
@@ -380,7 +439,8 @@ def main(argv=None):
     args = cli.parse_args(argv)
     rss = {key: getattr(args, f"rss_{key}") for key in RSS}
     args.out.mkdir(parents=True, exist_ok=True)
-    for path in args.paths:
+    paths = args.paths or sorted(p for p in EVALUATIONS.iterdir() if (p/"trace.jsonl").exists())
+    for path in paths:
         summary = summarize(path, threshold_s=args.ttc_threshold, rss=rss)
         target = args.out/(summary["name"].replace("/", "__") + ".json")
         target.write_text(json.dumps(summary, separators=(",", ":"), allow_nan=False))

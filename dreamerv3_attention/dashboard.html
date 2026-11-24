@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Training Run Dashboard</title>
+<title>Evaluation Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 :root {
@@ -73,15 +73,16 @@ tr.group td { font-weight: 600; color: var(--ink-2); padding-top: 12px; text-ali
 </head>
 <body>
 <main>
-<h1>Training run dashboard</h1>
+<h1>Evaluation dashboard</h1>
 <div class="bar">
   <label><input type="file" id="files" accept=".json" multiple> Add run summaries</label>
   <span id="chips" class="bar" style="margin:0"></span>
 </div>
 <div id="drop">
   <p>Drop summary files here, or use “Add run summaries”.</p>
-  <p class="note">Create them with <code>python -m dreamerv3_attention.dashboard runs/…/metrics.jsonl</code>.
-    They are written to <code>runs/dashboard/</code>.</p>
+  <p class="note">Create them with <code>python -m dreamerv3_attention.dashboard</code> (every run in
+    <code>runs/experiment_28/evaluation</code>), or pass evaluation directories or training
+    <code>metrics.jsonl</code> files. They are written to <code>runs/dashboard/</code>.</p>
 </div>
 <div id="app" class="hidden">
   <div class="bar card" id="filters"></div>
@@ -91,6 +92,13 @@ tr.group td { font-weight: 600; color: var(--ink-2); padding-top: 12px; text-ali
       Rates use total distance or total steps, not the mean of episode rates. Click a row to explore that metric.</p>
     <div class="card table-wrap"><table id="overview"></table></div>
     <p class="note" id="footnote" style="margin-top:8px"></p>
+  </section>
+  <section>
+    <h2>Per scenario</h2>
+    <p class="note">Each scenario’s value in each run (the mean if it ran more than once). Hover a cell to see
+      how the episode ended. Arrows compare with the baseline run.</p>
+    <div class="bar"><label>Metric <select id="pickScenario"></select></label></div>
+    <div class="card table-wrap"><table id="scenarios"></table></div>
   </section>
   <div id="sections"></div>
   <section id="explorer">
@@ -117,9 +125,9 @@ tr.group td { font-weight: 600; color: var(--ink-2); padding-top: 12px; text-ali
 const SECTIONS = [
   {title: "Driving score", note: "CARLA Leaderboard style: route completion × infraction penalty, averaged over episodes.",
    trends: ["driving_score", "route_completion"], breakdowns: ["episode_end"]},
-  {title: "Reward breakdown", note: "Mean total of each reward component per episode. Click a bar to plot that component over training.",
+  {title: "Reward breakdown", note: "Mean total of each reward component per episode. Click a bar to plot that component per episode.",
    breakdowns: ["reward_components"]},
-  {title: "Safety supervisor", note: "How often the supervisor changed the policy’s action, and why. Click a bar to plot that type over training.",
+  {title: "Safety supervisor", note: "How often the supervisor changed the policy’s action, and why. Click a bar to plot that type per episode.",
    trends: ["intervention_steps", "intervention_events"], breakdowns: ["intervention_types", "intervention_type_events"]},
   {title: "Time to collision", note: "TTC = distance to the front hazard ÷ closing speed, from CARLA ground truth. TET = time spent under the threshold.",
    trends: ["tet", "ttc_events"], histograms: ["min_ttc"]},
@@ -133,7 +141,8 @@ const MAX_POINTS = 400;
 const runs = [];   // {name, slot, data}
 const charts = {};
 const state = {filters: {source: "all", scenario: "all", weather: "all", perception: "all"},
-               window: 25, baseline: null, pickA: "driving_score", pickB: "tet", picks: {}};
+               window: 25, baseline: null, pickA: "driving_score", pickB: "tet", pickScenario: "driving_score",
+               picks: {}};
 let fields = new Map();
 
 const $ = id => document.getElementById(id);
@@ -159,6 +168,8 @@ async function addFiles(files) {
       const used = new Set(runs.map(r => r.slot));
       const slot = [0, 1, 2, 3, 4, 5, 6, 7].find(s => !used.has(s));
       if (slot === undefined) { alert("At most 8 runs can be compared at once."); break; }
+      // A 25-episode window only makes sense for training; evaluations run a handful of scenarios.
+      if (!runs.length) state.window = data.kind === "evaluation" ? 1 : 25;
       let name = data.name || file.name;
       while (runs.some(r => r.name === name)) name += " (2)";
       runs.push({name, slot, data});
@@ -196,6 +207,7 @@ const breakdownFields = key => [...fields.values()].filter(f => f.breakdown === 
 function aggregate(eps, f) {
   if (!eps.length) return null;
   const vals = eps.map(f.get);
+  if (vals.every(v => v === null || v === undefined)) return null;  // e.g. evaluation-only metrics on training runs
   if (f.agg === "per_km") { const km = sum(eps.map(e => e.info.km)); return km > 0 ? sum(vals.map(v => v ?? 0)) / km : null; }
   if (f.agg === "share_of_steps") { const n = sum(eps.map(e => e.info.steps)); return n ? 100 * sum(vals.map(v => v ?? 0)) / n : null; }
   if (f.agg === "sum") return sum(vals.map(v => v ?? 0));
@@ -218,6 +230,7 @@ function fmt(v, f) {
   return v.toLocaleString(undefined, {minimumFractionDigits: digits, maximumFractionDigits: digits});
 }
 const axisTitle = f => unitOf(f) ? `${f.label} (${unitOf(f)})` : f.label;
+const trendTitle = f => state.window > 1 ? `${f.label}, rolling ${state.window}-episode` : `${f.label} per episode`;
 
 function filtered(run) {
   const F = state.filters;
@@ -233,7 +246,7 @@ function trend(eps, f, stride) {
   const points = [];
   for (let i = 0; i < eps.length; i += stride) {
     const y = aggregate(eps.slice(Math.max(0, i - state.window + 1), i + 1), g);
-    points.push({x: i + 1, y});
+    points.push({x: i + 1, y, scenario: eps[i].info.scenario});
   }
   return points;
 }
@@ -264,9 +277,10 @@ function drawTrend(id, f) {
     data: {datasets: sets.map(([r, eps]) => ({label: r.name, data: trend(eps, f, stride), borderColor: color(r),
       backgroundColor: color(r), borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, spanGaps: true}))},
     options: {parsing: false, interaction: {mode: "index", intersect: false},
-      scales: {x: {type: "linear", title: {display: true, text: "Episode (in order, after filters)"}},
+      scales: {x: {type: "linear", ticks: {precision: 0}, title: {display: true, text: "Episode (in order, after filters)"}},
                y: {grace: "5%", title: {display: true, text: axisTitle(f)}}},
-      plugins: {tooltip: {callbacks: {title: items => `Episode ${items[0].parsed.x}, last ${state.window}`,
+      plugins: {tooltip: {callbacks: {title: items => state.window > 1 ? `Episode ${items[0].raw.x}, last ${state.window}`
+                                                      : `Episode ${items[0].raw.x} · ${items[0].raw.scenario}`,
                                       label: tooltipLabel(f)}}}}});
 }
 
@@ -329,7 +343,7 @@ function renderChips() {
   $("chips").replaceChildren(...runs.map(r => {
     const d = r.data, eps = d.episodes.length;
     const assumed = sum(d.episodes.map(e => e.m.collisions_type_assumed || 0));
-    const title = `${d.path || ""}\n${eps} episodes, ${d.incomplete_episodes ?? 0} incomplete skipped` +
+    const title = `${d.path || ""}${d.checkpoint ? `\nCheckpoint ${d.checkpoint}` : ""}\n${eps} episodes, ${d.incomplete_episodes ?? 0} incomplete skipped` +
       `\nTTC threshold ${d.ttc_threshold_s} s` +
       (d.rss ? `\nRSS: response ${d.rss.response_s} s, accel ${d.rss.accel_max}, brake min ${d.rss.brake_min}, lead brake max ${d.rss.brake_max} m/s²` : "") + (assumed ? `\n${assumed} collision(s) with assumed type` : "");
     return h("span", {class: "chip", title},
@@ -374,7 +388,8 @@ function renderOverview() {
   const base = runs.findIndex(r => r.name === state.baseline);
   const head = h("tr", {}, h("th", {}, "Metric"),
     runs.map((r, i) => h("th", {}, h("span", {class: "key", style: `background:${color(r)};margin-right:6px`}), r.name,
-      h("div", {class: "unit"}, `${eps[i].length} episodes · ${fmt(sum(eps[i].map(e => e.info.km)))} km`))));
+      h("div", {class: "unit"}, `${eps[i].length} episodes · ${fmt(sum(eps[i].map(e => e.info.km)))} km`),
+      r.data.checkpoint ? h("div", {class: "unit"}, r.data.checkpoint) : null)));
   const rows = [];
   let group = null;
   for (const f of fields.values()) {
@@ -383,17 +398,7 @@ function renderOverview() {
     const vals = eps.map(e => aggregate(e, f));
     rows.push(h("tr", {class: "metric", title: f.note || "", onclick: () => pick("pickA", f.id)},
       h("td", {}, f.label, " ", h("span", {class: "unit"}, unitOf(f))),
-      vals.map((v, i) => {
-        const cell = h("td", {}, fmt(v, f));
-        if (i !== base && base >= 0 && v !== null && vals[base] !== null) {
-          const d = v - vals[base];
-          const good = f.better === "higher" ? d > 0 : f.better === "lower" ? d < 0 : null;
-          const tiny = Math.abs(d) < 1e-9;
-          cell.append(h("span", {class: `delta ${tiny || good === null ? "flat" : good ? "up" : "down"}`},
-            `${tiny ? "=" : d > 0 ? "▲ +" : "▼ "}${tiny ? "" : fmt(d, f)}`));
-        }
-        return cell;
-      })));
+      vals.map((v, i) => valueCell(v, i === base ? null : vals[base], f))));
   }
   $("overview").replaceChildren(h("thead", {}, head), h("tbody", {}, rows));
   const p = runs[0]?.data.penalties || {};
@@ -401,6 +406,48 @@ function renderOverview() {
   $("footnote").textContent = `Infraction penalties: pedestrian ×${p.pedestrian}, vehicle ×${p.vehicle}, ` +
     `static ×${p.static}, red light ×${p.red_light}. Off-road progress is removed from route completion.` +
     (assumed ? ` ${assumed} collision(s) predate collision-type logging and are counted as static.` : "");
+}
+
+// Table cell with the change from the baseline value (none for the baseline itself).
+function valueCell(v, baseValue, f, title) {
+  const cell = h("td", {title}, fmt(v, f));
+  if (v !== null && baseValue !== null && baseValue !== undefined) {
+    const d = v - baseValue;
+    const good = f.better === "higher" ? d > 0 : f.better === "lower" ? d < 0 : null;
+    const tiny = Math.abs(d) < 1e-9;
+    cell.append(h("span", {class: `delta ${tiny || good === null ? "flat" : good ? "up" : "down"}`},
+      `${tiny ? "=" : d > 0 ? "▲ +" : "▼ "}${tiny ? "" : fmt(d, f)}`));
+  }
+  return cell;
+}
+
+function renderScenarios() {
+  fillPicker("pickScenario");
+  const f = fields.get(state.pickScenario);
+  const eps = runs.map(filtered);
+  const base = runs.findIndex(r => r.name === state.baseline);
+  const scenarios = [...new Set(eps.flat().map(e => e.info.scenario))];
+  const head = h("tr", {}, h("th", {}, "Scenario"),
+    runs.map(r => h("th", {}, h("span", {class: "key", style: `background:${color(r)};margin-right:6px`}), r.name)));
+  const row = (label, pickEps) => {
+    const groups = eps.map(pickEps);
+    const vals = groups.map(g => aggregate(g, f));
+    const endings = g => g.map(e => Object.keys(e.b?.episode_end || {}).join(", ")).join("; ");
+    return h("tr", {}, h("td", {}, label),
+      vals.map((v, i) => valueCell(v, i === base ? null : vals[base], f, endings(groups[i]) || "Not run")));
+  };
+  const rows = scenarios.map(s => row(s, e => e.filter(ep => ep.info.scenario === s)));
+  rows.push(row(h("strong", {}, "All scenarios"), e => e));
+  $("scenarios").replaceChildren(h("thead", {}, head), h("tbody", {}, rows));
+}
+$("pickScenario").addEventListener("change", e => { state.pickScenario = e.target.value; renderScenarios(); });
+
+function fillPicker(sel) {
+  if (!fields.has(state[sel])) state[sel] = fields.keys().next().value;
+  const groups = new Map();
+  for (const f of fields.values()) (groups.get(f.group) || groups.set(f.group, []).get(f.group)).push(f);
+  $(sel).replaceChildren(...[...groups].map(([g, fs]) => h("optgroup", {label: g},
+    fs.map(f => h("option", {value: f.id, selected: f.id === state[sel]}, f.cat ?? f.label)))));
 }
 
 function pick(selectId, id) {
@@ -425,7 +472,7 @@ function renderSections() {
       const f = fields.get(key);
       if (!f) continue;
       const id = `s${si}-trend-${key}`;
-      grid.append(card(`${f.label}, rolling ${state.window}-episode`, id));
+      grid.append(card(trendTitle(f), id));
       draws.push(() => drawTrend(id, f));
     }
     for (const key of s.histograms || []) {
@@ -452,7 +499,7 @@ function renderSections() {
           let id = state.picks[sid];
           if (!order.some(f => f.id === id)) id = order[0]?.id;
           const f = fields.get(id);
-          $(`${sid}-pick-title`).textContent = f ? `${f.label}, rolling ${state.window}-episode (click a bar to change)` : "No data";
+          $(`${sid}-pick-title`).textContent = f ? `${trendTitle(f)} (click a bar to change)` : "No data";
           if (f) drawTrend(`${sid}-pick`, f); else charts[`${sid}-pick`]?.destroy();
         };
         drawPicked();
@@ -465,18 +512,13 @@ function renderSections() {
 }
 
 function renderExplorer() {
-  for (const sel of ["pickA", "pickB"]) {
-    if (!fields.has(state[sel])) state[sel] = fields.keys().next().value;
-    const groups = new Map();
-    for (const f of fields.values()) (groups.get(f.group) || groups.set(f.group, []).get(f.group)).push(f);
-    $(sel).replaceChildren(...[...groups].map(([g, fs]) => h("optgroup", {label: g},
-      fs.map(f => h("option", {value: f.id, selected: f.id === state[sel]}, f.cat ?? f.label)))));
-  }
+  fillPicker("pickA");
+  fillPicker("pickB");
   const a = fields.get(state.pickA), b = fields.get(state.pickB);
-  $("trendA-title").textContent = `${a.label}, rolling ${state.window}-episode`;
+  $("trendA-title").textContent = trendTitle(a);
   $("histA-title").textContent = `${a.label} per episode, distribution`;
   $("scatter-title").textContent = `${a.label} vs ${b.label}, one point per episode`;
-  $("trendB-title").textContent = `${b.label}, rolling ${state.window}-episode`;
+  $("trendB-title").textContent = trendTitle(b);
   drawTrend("trendA", a); drawHistogram("histA", a); drawScatter("scatter", a, b); drawTrend("trendB", b);
 }
 $("pickA").addEventListener("change", e => pick("pickA", e.target.value));
@@ -492,6 +534,7 @@ function render() {
   themeDefaults();
   renderFilters();
   renderOverview();
+  renderScenarios();
   renderSections();
   renderExplorer();
 }
