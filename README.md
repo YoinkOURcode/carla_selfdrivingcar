@@ -179,6 +179,19 @@ python -m dreamerv3_attention viewer \
 Select a destination and click **Start drive**. Use a compatible single-case
 configuration when viewing a named scenario.
 
+## Compare runs
+
+```bash
+python -m dreamerv3_attention.dashboard runs/A/metrics.jsonl runs/B/metrics.jsonl
+```
+
+This writes one small summary per run to `runs/dashboard/`. Open
+`dreamerv3_attention/dashboard.html` in a browser and add the summaries. It
+shows CARLA Leaderboard-style driving score, reward components, safety
+supervisor interventions, and TTC/TET (`--ttc-threshold`, default 1.5 s), with
+filters and a two-metric explorer. To add a metric, add an `@metric` or
+`@breakdown` function in `dashboard.py`; the page picks it up automatically.
+
 ## Architecture: how it works
 
 ```text
