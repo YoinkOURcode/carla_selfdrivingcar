@@ -186,5 +186,5 @@ def run(a,carla):
 if __name__=='__main__':
     args=parse_args()
     try:import carla
-    except ImportError:sys.exit('The carla package is not installed. Run setup_windows.bat with your CARLA version, e.g. setup_windows.bat 0.9.16')
+    except ImportError:sys.exit('The carla package is not installed. Install the client matching your CARLA server, e.g. pip install carla==0.9.16')
     run(args,carla)

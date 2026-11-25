@@ -79,8 +79,7 @@ compile_commands.json
 /runs/orchestrator_wm_20261024_001/
 graphify-out
 *.sh
-*.md
-!README.md
+.pytest_cache/
 .agents/
 .agentflow/
 .codex/
