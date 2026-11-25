@@ -22,6 +22,7 @@ from ultralytics import YOLO, settings
 from ultralytics.engine.results import Boxes
 
 from dedupe import merge_duplicates
+import model_pages
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
@@ -88,7 +89,7 @@ footer{color:var(--dim);font-size:13px;line-height:1.7;padding:30px 36px 16px}kb
 <header class="hero"><canvas id="field" aria-hidden="true"></canvas>
 <div><div class="brand"><svg viewBox="0 0 26 26" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="6" width="20" height="14" rx="2"/><circle cx="13" cy="13" r="3.2" fill="#fff" stroke="none"/></svg>CARLA perception</div>
 <h1>Seeing the road<br>from one camera</h1></div>
-<nav aria-label="Sections"><a href="#demo">Demo</a><a href="#test">Held-out test</a><a href="#results">Validation</a><a href="#dataset">Dataset</a><a href="#notes">Notes</a></nav>
+<nav aria-label="Models"><a href="/" style="color:var(--dim)">Detector</a><a href="/road">Road model</a><a href="/signs">Speed signs</a></nav>
 <p class="lede">A seven-class detector trained on our own CARLA captures. It finds vehicles, traffic lights by colour, adult and child pedestrians, and speed-limit signs, and feeds them to the driving agent.</p>
 </header>
 
@@ -277,6 +278,9 @@ def main():
     upload_lock = threading.Lock()
     upload_count = 0
     artifacts = {}
+    # Road model and speed-sign pages are optional: if they cannot load, the detector page runs as before
+    extras, extras_reason = model_pages.load(args.device, model, options, inference_lock)
+    print("Road model and speed-sign pages: " + ("ready" if extras else f"unavailable ({extras_reason})"), flush=True)
 
     class Handler(BaseHTTPRequestHandler):
         def send(self, content, mime, status=200):
@@ -299,6 +303,8 @@ def main():
         def do_GET(self):
             # Serve only known examples and generated predictions
             route = urlsplit(self.path).path
+            if model_pages.handle(self, extras, extras_reason, PAGE, "GET"):
+                return
             if route == "/":
                 self.send(PAGE.encode(), "text/html; charset=utf-8")
             elif route == "/examples":
@@ -356,6 +362,8 @@ def main():
 
         def do_POST(self):
             route = urlsplit(self.path).path
+            if model_pages.handle(self, extras, extras_reason, PAGE, "POST"):
+                return
             if route == "/upload":
                 self.upload()
                 return
