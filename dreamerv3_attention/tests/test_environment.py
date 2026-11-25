@@ -1430,3 +1430,16 @@ def test_provider_path_heading_is_the_route_tangent_in_a_sharp_bend():
     _, _, route_heading = Route(env.route.points).project((0., 0.))
     simulator_heading = -route_heading  # ego yaw 0: the environment's heading_error_rad
     assert abs(lane) < 1e-6 and heading == pytest.approx(simulator_heading, abs=.02)
+
+
+def test_collision_actor_types_are_logged_in_step_info():
+    env, _ = fake_environment()
+    env.rig.consume_collision = lambda frame: [{"other_actor_type": "static.prop.fence"},
+                                               {"other_actor_type": "walker.pedestrian.0001"}]
+    state, _ = env._observe(42)
+    assert state.collision and state.pedestrian_collision
+    assert env.collision_actor_types == ["static.prop.fence", "walker.pedestrian.0001"]
+    step_env = fake_step_environment()
+    step_env.collision_actor_types = ["vehicle.tesla.model3"]
+    _, _, _, _, info = step_env.step((0., 0.))
+    assert info["collision_actor_types"] == ["vehicle.tesla.model3"]

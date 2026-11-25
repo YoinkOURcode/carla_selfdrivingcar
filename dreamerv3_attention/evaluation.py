@@ -457,7 +457,10 @@ def evaluate(cfg, agent, env_factory=None, episodes: Optional[int] = None,
                          "truncated": truncated, "action_source": action_source}
                 if trace_path is not None:
                     with Path(trace_path).open("a") as trace:
-                        trace.write(json.dumps({"scenario": scenario["name"], **info}, allow_nan=False) + "\n")
+                        trace.write(json.dumps({"scenario": scenario["name"], **info, "episode": episode,
+                                                "reward": float(reward), "terminated": bool(terminated),
+                                                "truncated": bool(truncated), "action_source": action_source},
+                                               allow_nan=False) + "\n")
             if observer is not None and shown is not None:
                 observer.publish(env, observation, shown, attention_enabled=policy_attention)
             if saved:

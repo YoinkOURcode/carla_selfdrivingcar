@@ -31,6 +31,7 @@ Technology, AY2026/27 Trimester 1.
 | [1. See it working](#1-see-it-working) | Live perception demo in the browser and recorded drives | A browser | 2 minutes |
 | [2. Run the vision models locally](#2-run-the-vision-models-locally) | Detector and road model on your own machine | Python 3.10 to 3.12, any OS | 10 minutes |
 | [3. Run the full system](#3-run-the-full-system) | CARLA, the driving agent and the live viewer | Linux, NVIDIA GPU with 8 GB or more | About 2 hours, mostly downloads |
+| [4. Compare runs](#4-compare-runs) | Dashboard of driving score, safety and reward metrics across evaluation and training runs | Python and the run folders (evaluation traces or training metrics) | 5 minutes |
 
 ### 1. See it working
 
@@ -90,6 +91,24 @@ size. They are in the OneDrive folder `CVDL CARLA SUBMISSION`:
 | `videos/` | Recorded drives of the final and prototype agents |
 
 SETUP_LINUX.md section 6 lists which file goes where on the machine.
+
+### 4. Compare runs
+
+```bash
+python -m dreamerv3_attention.dashboard                 # every run in runs/experiment_28/evaluation
+python -m dreamerv3_attention.dashboard runs/experiment_28/evaluation/eval24 runs/A/metrics.jsonl
+```
+
+This writes one small summary per run to `runs/dashboard/`. A run is an
+evaluation directory (`trace.jsonl`, plus `result.json` once finished) or a
+training `metrics.jsonl`. Open `dreamerv3_attention/dashboard.html` in a
+browser and add up to 8 summaries. It shows CARLA Leaderboard-style driving
+score, a per-scenario table, reward components, safety supervisor
+interventions, TTC/TET (`--ttc-threshold`, default 1.5 s), RSS safe distance and
+the evaluation report from `result.json` (speeding, unnecessary stops, comfort,
+latency), with filters and a two-metric explorer. To add a metric, add an
+`@metric` or `@breakdown` function in `dashboard.py`; the page picks it up
+automatically.
 
 ## How it works
 

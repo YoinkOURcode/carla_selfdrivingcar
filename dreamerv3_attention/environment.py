@@ -1039,6 +1039,7 @@ class CarlaEnv:
         collisions = self.rig.consume_collision(frame)
         state.collision = bool(collisions)
         state.pedestrian_collision = any(event["other_actor_type"].startswith("walker.") for event in collisions)
+        self.collision_actor_types = [event["other_actor_type"] for event in collisions]
         self.oracle_state = replace(state)
         self.radar_hazards = {}
         objects = (np.stack([row for _, row in sorted(rows, key=lambda pair: pair[0])]) if rows else
@@ -1311,6 +1312,7 @@ class CarlaEnv:
                 "policy_observation_invalid_reason": state.observation_invalid_reason,
                 "external_fields": self.cfg.mixed_fields if self.cfg.perception == "mixed" else self.cfg.perception,
                 "sensor_valid": dict(self.last_bundle.valid),
+                "collision_actor_types": list(getattr(self, "collision_actor_types", [])),
                 "route_length_m": self.route.length, **asdict(oracle)}
         sign_debug = getattr(getattr(self, "provider", None), "sign_debug", None)
         if sign_debug is not None:

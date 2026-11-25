@@ -16,6 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .object_tracker import ObjectTracker
 from .sensors import PerceptionPrediction, associate_depth
 from .stop_lines import project_to_path
 from .traffic_signals import SignalTracker
@@ -34,8 +35,9 @@ VISION_LANE_MAX_DISAGREEMENT_M = 2.0
 # it on (Town02 88->61, 41->93: lane 0.6-1.0 m and heading sign wrong; held estimates in
 # sharp bends 98% wrong). Where the aligned route (planned path + odometry) disagrees by
 # more than this, it is the closer estimate on 96-100% of frames; fires on ~1% of straights.
-ROUTE_LANE_MAX_DISAGREEMENT_M = 0.5
-ROUTE_HEADING_MAX_DISAGREEMENT_RAD = 0.15
+# A depth point this far above or below the road plane is not road (e.g. a car over the
+# extrapolated centre line), so that lane pixel falls back to the flat-road projection.
+ROAD_HEIGHT_TOLERANCE_M = 0.5
 
 
 def path_lane(path):
@@ -138,6 +140,7 @@ class VisionPerceptionProvider:
             raise ValueError("VISION_MAX_EXTRAPOLATION must be in (0, 1] and VISION_LANE_HOLD_S in [0, 10]")
         self._last_lane = None
         self.signal_tracker = SignalTracker(_env_float("VISION_SIGNAL_HOLD_S", "2.0", 0., 10.))
+        self.object_tracker = ObjectTracker()
         self.sign_reader = make_sign_reader()
         self.speed_limits = SpeedLimitTracker()
         if self.sign_reader is None:
@@ -150,6 +153,8 @@ class VisionPerceptionProvider:
             self.signal_tracker.reset()
         if getattr(self, "speed_limits", None) is not None:
             self.speed_limits.reset()
+        if getattr(self, "object_tracker", None) is not None:
+            self.object_tracker.reset()
 
     @staticmethod
     def ground_point(u, v, calibration):
@@ -178,6 +183,19 @@ class VisionPerceptionProvider:
         location = np.asarray(extrinsics["location_m"], dtype=float)
         return location + depth_m * np.array([1., (u-intrinsics["cx"])/intrinsics["fx"],
                                               -(v-intrinsics["cy"])/intrinsics["fy"]])
+
+    def lane_point(self, u, v, depth_image, calibration):
+        """Ego-frame point of a lane-centre pixel: measured depth where the pixel shows road,
+        otherwise the flat-road projection."""
+        if depth_image is not None:
+            col, row = int(round(u)), int(round(v))
+            if 0 <= col < depth_image.shape[1] and 0 <= row < depth_image.shape[0]:
+                patch = depth_image[max(0, row-2):row+3, max(0, col-2):col+3]
+                values = patch[np.isfinite(patch) & (patch < 999.)]
+                point = self.depth_point(u, v, float(np.median(values)), calibration) if values.size else None
+                if point is not None and abs(point[2]) <= ROAD_HEIGHT_TOLERANCE_M:
+                    return point
+        return self.ground_point(u, v, calibration)
 
     def _signals(self, bundle, bgr, road, points, lights, calibration, depth_image):
         path = bundle.ego_path
@@ -247,7 +265,7 @@ class VisionPerceptionProvider:
         detections = self.detector.predict(bgr, imgsz=1280, conf=0.25,
                                            device=self.device, verbose=False)[0].boxes
         center = road.get("lane_center") or {}
-        points = [self.ground_point(u, v, calibration) for u, v in center.get("center_line", [])]
+        points = [self.lane_point(u, v, depth_image, calibration) for u, v in center.get("center_line", [])]
         points = np.asarray([p for p in points if p is not None and p[0] <= 30.])
         # Accept by extrapolation share when reported, otherwise by the estimator's own confidence flag.
         extrapolated = center.get("extrapolated_fraction")
@@ -297,12 +315,6 @@ class VisionPerceptionProvider:
             fields.update(lane_error_m=route_lane[0], heading_error_rad=route_lane[1],
                           observations_valid=True, lane_source="route_junction")
             self._last_lane = (float(bundle.timestamp), *route_lane, route_lane)
-        elif estimate is not None and aligned_route is not None and (
-                abs(estimate[0] - aligned_route[0]) > ROUTE_LANE_MAX_DISAGREEMENT_M or
-                abs(estimate[1] - aligned_route[1]) > ROUTE_HEADING_MAX_DISAGREEMENT_RAD):
-            fields.update(lane_error_m=aligned_route[0], heading_error_rad=aligned_route[1],
-                          observations_valid=True, lane_source="route_aligned")
-            self._last_lane = (float(bundle.timestamp), *aligned_route, aligned_route)
         elif vision_lane is not None:
             fields.update(lane_error_m=vision_lane[0], heading_error_rad=vision_lane[1],
                           observations_valid=True, lane_source="vision")
@@ -373,6 +385,13 @@ class VisionPerceptionProvider:
                 # PerceptionPrediction.depth_m/uncertainty, which the environment writes back.
                 row[12:15] = [depth/100., 1., uncertainty/100.] if has_depth else [0., 0., 0.]
                 rows.append(row)
+        tracker = getattr(self, "object_tracker", None)
+        if tracker is not None and bundle.ego_pose is not None:
+            # Velocity channels: relative ego-frame velocity /30, as in the ground-truth rows.
+            velocities = tracker.update(bundle.timestamp, bundle.ego_pose,
+                                        [row[:3]*100. for row in rows], [bool(row[6] > .5) for row in rows])
+            for row, velocity in zip(rows, velocities):
+                row[3:6] = velocity/30.
         signal_fields, signals = self._signals(bundle, bgr, road, points, lights, calibration, depth_image)
         fields.update(signal_fields)
         self._read_speed_limit(bundle, bgr, signs, calibration, fields)

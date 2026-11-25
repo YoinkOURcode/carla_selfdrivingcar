@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evaluation Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,.10);
+  --good: #006300; --bad: #d03b3b;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,.10);
+    --good: #0ca30c; --bad: #e66767;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s8: #e66767;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,.10);
+  --good: #0ca30c; --bad: #e66767;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s8: #e66767;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink);
+       font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1280px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 20px; margin: 4px 0 12px; }
+h2 { font-size: 16px; margin: 0 0 4px; }
+h3 { font-size: 13px; margin: 0 0 8px; color: var(--ink-2); font-weight: 600; }
+p.note, .note { color: var(--ink-2); margin: 0 0 12px; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 12px; }
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 8px; padding: 12px; min-width: 0; }
+section { margin: 20px 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 12px; align-items: start; }
+.plot { position: relative; height: 260px; }
+label { color: var(--ink-2); font-size: 13px; }
+select, input, button { font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--axis); border-radius: 6px; padding: 4px 8px; }
+button { cursor: pointer; }
+button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.seg { display: inline-flex; } .seg button { border-radius: 0; margin-left: -1px; }
+.seg button:first-child { border-radius: 6px 0 0 6px; } .seg button:last-child { border-radius: 0 6px 6px 0; }
+.chip { display: inline-flex; gap: 6px; align-items: center; padding: 4px 8px; border: 1px solid var(--ring);
+  border-radius: 999px; background: var(--surface); }
+.chip button { border: 0; padding: 0 4px; background: none; color: var(--muted); }
+.key { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+#drop { border: 2px dashed var(--axis); border-radius: 8px; padding: 24px; text-align: center; color: var(--ink-2); }
+body.dragging #drop { border-color: var(--s1); }
+code { font-size: 12px; background: var(--grid); padding: 1px 4px; border-radius: 4px; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 5px 8px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; white-space: normal; }
+tbody tr.metric { cursor: pointer; } tbody tr.metric:hover { background: var(--grid); }
+tr.group td { font-weight: 600; color: var(--ink-2); padding-top: 12px; text-align: left; }
+.unit { color: var(--muted); font-size: 12px; }
+.up { color: var(--good); } .down { color: var(--bad); } .flat { color: var(--muted); }
+.delta { font-size: 12px; margin-left: 6px; }
+.hidden { display: none; }
+</style>
+</head>
+<body>
+<main>
+<h1>Evaluation dashboard</h1>
+<div class="bar">
+  <label><input type="file" id="files" accept=".json" multiple> Add run summaries</label>
+  <span id="chips" class="bar" style="margin:0"></span>
+</div>
+<div id="drop">
+  <p>Drop summary files here, or use “Add run summaries”.</p>
+  <p class="note">Create them with <code>python -m dreamerv3_attention.dashboard</code> (every run in
+    <code>runs/experiment_28/evaluation</code>), or pass evaluation directories or training
+    <code>metrics.jsonl</code> files. They are written to <code>runs/dashboard/</code>.</p>
+</div>
+<div id="app" class="hidden">
+  <div class="bar card" id="filters"></div>
+  <section>
+    <h2>Overview</h2>
+    <p class="note">Run totals for the filtered episodes. Arrows compare with the baseline run.
+      Rates use total distance or total steps, not the mean of episode rates. Click a row to explore that metric.</p>
+    <div class="card table-wrap"><table id="overview"></table></div>
+    <p class="note" id="footnote" style="margin-top:8px"></p>
+  </section>
+  <section>
+    <h2>Per scenario</h2>
+    <p class="note">Each scenario’s value in each run (the mean if it ran more than once). Hover a cell to see
+      how the episode ended. Arrows compare with the baseline run.</p>
+    <div class="bar"><label>Metric <select id="pickScenario"></select></label></div>
+    <div class="card table-wrap"><table id="scenarios"></table></div>
+  </section>
+  <div id="sections"></div>
+  <section id="explorer">
+    <h2>Metric explorer</h2>
+    <p class="note">Compare any two metrics, including single reward components or intervention types.</p>
+    <div class="bar">
+      <label>Metric A <select id="pickA"></select></label>
+      <label>Metric B <select id="pickB"></select></label>
+      <button id="swap">Swap</button>
+    </div>
+    <div class="grid">
+      <div class="card"><h3 id="trendA-title"></h3><div class="plot"><canvas id="trendA"></canvas></div></div>
+      <div class="card"><h3 id="histA-title"></h3><div class="plot"><canvas id="histA"></canvas></div></div>
+      <div class="card"><h3 id="scatter-title"></h3><div class="plot"><canvas id="scatter"></canvas></div></div>
+      <div class="card"><h3 id="trendB-title"></h3><div class="plot"><canvas id="trendB"></canvas></div></div>
+    </div>
+  </section>
+</div>
+</main>
+<script>
+"use strict";
+// Sections with a fixed layout. Metrics and breakdowns not named here still appear in the
+// overview table and the explorer; unnamed breakdowns get their own section automatically.
+const SECTIONS = [
+  {title: "Driving score", note: "CARLA Leaderboard style: route completion × infraction penalty, averaged over episodes.",
+   trends: ["driving_score", "route_completion"], breakdowns: ["episode_end"]},
+  {title: "Reward breakdown", note: "Mean total of each reward component per episode. Click a bar to plot that component per episode.",
+   breakdowns: ["reward_components"]},
+  {title: "Safety supervisor", note: "How often the supervisor changed the policy’s action, and why. Click a bar to plot that type per episode.",
+   trends: ["intervention_steps", "intervention_events"], breakdowns: ["intervention_types", "intervention_type_events"]},
+  {title: "Time to collision", note: "TTC = distance to the front hazard ÷ closing speed, from CARLA ground truth. TET = time spent under the threshold.",
+   trends: ["tet", "ttc_events"], histograms: ["min_ttc"]},
+  {title: "Safe distance (RSS)", note: "Longitudinal RSS: could the car stop if the vehicle ahead braked as hard as allowed? Catches tailgating that TTC misses when speeds match.",
+   trends: ["rss_unsafe_steps", "rss_violations"], histograms: ["rss_min_margin"]},
+];
+const SOURCE_LABELS = {actor: "Policy", controller_refresh: "Controller"};
+const SHAPES = ["circle", "triangle", "rect", "rectRot", "star", "crossRot", "rectRounded", "cross"];
+const MAX_POINTS = 400;
+
+const runs = [];   // {name, slot, data}
+const charts = {};
+const state = {filters: {source: "all", scenario: "all", weather: "all", perception: "all"},
+               window: 25, baseline: null, pickA: "driving_score", pickB: "tet", pickScenario: "driving_score",
+               picks: {}};
+let fields = new Map();
+
+const $ = id => document.getElementById(id);
+const sum = xs => xs.reduce((a, b) => a + b, 0);
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const color = run => css(`--s${run.slot + 1}`);
+function h(tag, attrs = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null && v !== false) el.setAttribute(k, v);
+  }
+  for (const c of children.flat()) if (c !== null && c !== undefined) el.append(c);
+  return el;
+}
+
+// ---------------------------------------------------------------- loading
+async function addFiles(files) {
+  for (const file of files) {
+    try {
+      const data = JSON.parse(await file.text());
+      if (!Array.isArray(data.episodes) || !Array.isArray(data.metrics)) throw new Error("not a dashboard summary");
+      const used = new Set(runs.map(r => r.slot));
+      const slot = [0, 1, 2, 3, 4, 5, 6, 7].find(s => !used.has(s));
+      if (slot === undefined) { alert("At most 8 runs can be compared at once."); break; }
+      // A 25-episode window only makes sense for training; evaluations run a handful of scenarios.
+      if (!runs.length) state.window = data.kind === "evaluation" ? 1 : 25;
+      let name = data.name || file.name;
+      while (runs.some(r => r.name === name)) name += " (2)";
+      runs.push({name, slot, data});
+    } catch (err) { alert(`${file.name}: ${err.message}`); }
+  }
+  if (state.baseline === null && runs.length) state.baseline = runs[0].name;
+  render();
+}
+$("files").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
+addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("dragging"); });
+addEventListener("dragleave", () => document.body.classList.remove("dragging"));
+addEventListener("drop", e => { e.preventDefault(); document.body.classList.remove("dragging"); addFiles(e.dataTransfer.files); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render());
+
+// ---------------------------------------------------------------- fields and aggregation
+function buildFields() {
+  const out = new Map();
+  for (const run of runs) {
+    for (const m of run.data.metrics)
+      if (!out.has(m.key)) out.set(m.key, {...m, id: m.key, get: ep => ep.m[m.key]});
+    for (const b of run.data.breakdowns || []) {
+      const cats = new Set();
+      for (const ep of run.data.episodes) for (const c of Object.keys(ep.b?.[b.key] || {})) cats.add(c);
+      for (const c of cats) {
+        const id = `${b.key}:${c}`;
+        if (!out.has(id)) out.set(id, {...b, id, cat: c, breakdown: b.key, label: `${b.label}: ${c}`,
+                                       group: b.label, better: "none", get: ep => ep.b?.[b.key]?.[c] ?? 0});
+      }
+    }
+  }
+  return out;
+}
+const breakdownFields = key => [...fields.values()].filter(f => f.breakdown === key);
+
+function aggregate(eps, f) {
+  if (!eps.length) return null;
+  const vals = eps.map(f.get);
+  if (vals.every(v => v === null || v === undefined)) return null;  // e.g. evaluation-only metrics on training runs
+  if (f.agg === "per_km") { const km = sum(eps.map(e => e.info.km)); return km > 0 ? sum(vals.map(v => v ?? 0)) / km : null; }
+  if (f.agg === "share_of_steps") { const n = sum(eps.map(e => e.info.steps)); return n ? 100 * sum(vals.map(v => v ?? 0)) / n : null; }
+  if (f.agg === "sum") return sum(vals.map(v => v ?? 0));
+  const ok = vals.filter(v => v !== null && v !== undefined);
+  return ok.length ? sum(ok) / ok.length : null;
+}
+// One episode's value in display units. Rates on episodes shorter than 10 m are too noisy to show.
+function episodeValue(ep, f) {
+  const v = f.get(ep);
+  if (v === null || v === undefined) return null;
+  if (f.agg === "per_km") return ep.info.km > .01 ? v / ep.info.km : null;
+  if (f.agg === "share_of_steps") return ep.info.steps ? 100 * v / ep.info.steps : null;
+  return v;
+}
+const unitOf = f => f.agg === "share_of_steps" ? "% steps" : f.unit || "";
+function fmt(v, f) {
+  if (v === null || v === undefined || !isFinite(v)) return "—";
+  const a = Math.abs(v);
+  const digits = f?.unit === "×" ? 3 : a >= 100 ? 0 : a >= 10 ? 1 : 2;
+  return v.toLocaleString(undefined, {minimumFractionDigits: digits, maximumFractionDigits: digits});
+}
+const axisTitle = f => unitOf(f) ? `${f.label} (${unitOf(f)})` : f.label;
+const trendTitle = f => state.window > 1 ? `${f.label}, rolling ${state.window}-episode` : `${f.label} per episode`;
+
+function filtered(run) {
+  const F = state.filters;
+  return run.data.episodes.filter(ep => (F.source === "all" || ep.info.source === F.source) &&
+    (F.scenario === "all" || ep.info.scenario === F.scenario) &&
+    (F.weather === "all" || ep.info.weather === F.weather) &&
+    (F.perception === "all" || ep.info.perception === F.perception));
+}
+
+// Trailing rolling aggregate on a grid shared by all runs, so tooltips line up by episode.
+function trend(eps, f, stride) {
+  const g = f.agg === "sum" ? {...f, agg: "mean"} : f;
+  const points = [];
+  for (let i = 0; i < eps.length; i += stride) {
+    const y = aggregate(eps.slice(Math.max(0, i - state.window + 1), i + 1), g);
+    points.push({x: i + 1, y, scenario: eps[i].info.scenario});
+  }
+  return points;
+}
+
+// ---------------------------------------------------------------- charts
+function themeDefaults() {
+  Chart.defaults.color = css("--ink-2");
+  Chart.defaults.borderColor = css("--grid");
+  Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+  Chart.defaults.animation = false;
+  Chart.defaults.maintainAspectRatio = false;
+  Chart.defaults.plugins.legend.labels.boxWidth = 14;
+  Chart.defaults.plugins.legend.labels.boxHeight = 3;
+}
+function draw(id, config) {
+  charts[id]?.destroy();
+  const canvas = $(id);
+  if (canvas) charts[id] = new Chart(canvas, config);
+}
+function tooltipLabel(f) {
+  return ctx => `${ctx.dataset.label}: ${fmt(ctx.parsed[ctx.chart.options.indexAxis === "y" ? "x" : "y"], f)} ${unitOf(f)}`;
+}
+
+function drawTrend(id, f) {
+  const sets = runs.map(r => [r, filtered(r)]);
+  const stride = Math.max(1, Math.ceil(Math.max(0, ...sets.map(([, e]) => e.length)) / MAX_POINTS));
+  draw(id, {type: "line",
+    data: {datasets: sets.map(([r, eps]) => ({label: r.name, data: trend(eps, f, stride), borderColor: color(r),
+      backgroundColor: color(r), borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, spanGaps: true}))},
+    options: {parsing: false, interaction: {mode: "index", intersect: false},
+      scales: {x: {type: "linear", ticks: {precision: 0}, title: {display: true, text: "Episode (in order, after filters)"}},
+               y: {grace: "5%", title: {display: true, text: axisTitle(f)}}},
+      plugins: {tooltip: {callbacks: {title: items => state.window > 1 ? `Episode ${items[0].raw.x}, last ${state.window}`
+                                                      : `Episode ${items[0].raw.x} · ${items[0].raw.scenario}`,
+                                      label: tooltipLabel(f)}}}}});
+}
+
+function drawBreakdown(id, key, onPick) {
+  const cats = breakdownFields(key);
+  const values = runs.map(r => { const eps = filtered(r); return cats.map(f => aggregate(eps, f)); });
+  const order = cats.map((f, i) => [f, Math.max(0, ...values.map(v => Math.abs(v[i] ?? 0)))])
+    .filter(([, m]) => m > 1e-9).sort((a, b) => b[1] - a[1]).map(([f]) => f);
+  const canvas = $(id);
+  if (canvas) canvas.parentElement.style.height = `${Math.max(140, order.length * (runs.length * 12 + 12) + 70)}px`;
+  draw(id, {type: "bar",
+    data: {labels: order.map(f => f.cat),
+      datasets: runs.map((r, ri) => ({label: r.name, backgroundColor: color(r), borderRadius: 4, borderSkipped: "start",
+        data: order.map(f => values[ri][cats.indexOf(f)] ?? 0)}))},
+    options: {indexAxis: "y", categoryPercentage: .85, barPercentage: .9,
+      scales: {x: {title: {display: true, text: unitOf(cats[0] || {})}, grid: {color: c => c.tick.value === 0 ? css("--axis") : css("--grid")}}},
+      onClick: (e, els) => { if (els.length) onPick(order[els[0].index].id); },
+      onHover: (e, els) => { e.native.target.style.cursor = els.length ? "pointer" : "default"; },
+      plugins: {tooltip: {callbacks: {label: tooltipLabel(cats[0] || {})}}}}});
+  return order;
+}
+
+function drawHistogram(id, f) {
+  const per = runs.map(r => filtered(r).map(ep => episodeValue(ep, f)).filter(v => v !== null));
+  const all = per.flat();
+  if (!all.length) { draw(id, {type: "bar", data: {labels: [], datasets: []}}); return; }
+  const lo = Math.min(...all), hi = Math.max(...all), bins = 20, w = (hi - lo) / bins || 1;
+  const labels = Array.from({length: bins}, (_, i) => `${fmt(lo + i * w, f)}–${fmt(lo + (i + 1) * w, f)}`);
+  draw(id, {type: "bar",
+    data: {labels, datasets: runs.map((r, ri) => {
+      const counts = Array(bins).fill(0);
+      for (const v of per[ri]) counts[Math.min(bins - 1, Math.floor((v - lo) / w))]++;
+      return {label: r.name, backgroundColor: color(r), borderRadius: 4, borderSkipped: "start",
+              data: counts.map(c => per[ri].length ? 100 * c / per[ri].length : 0)};
+    })},
+    options: {scales: {x: {title: {display: true, text: axisTitle(f)}}, y: {title: {display: true, text: "% of episodes"}}},
+      plugins: {tooltip: {callbacks: {label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}% of episodes`}}}}});
+}
+
+function drawScatter(id, fx, fy) {
+  draw(id, {type: "scatter",
+    data: {datasets: runs.map(r => {
+      const eps = filtered(r), stride = Math.max(1, Math.ceil(eps.length / 3000));
+      const data = [];
+      for (let i = 0; i < eps.length; i += stride) {
+        const x = episodeValue(eps[i], fx), y = episodeValue(eps[i], fy);
+        if (x !== null && y !== null) data.push({x, y, episode: eps[i].info.episode});
+      }
+      return {label: r.name, data, pointStyle: SHAPES[r.slot], pointRadius: 4, pointHoverRadius: 6,
+              backgroundColor: color(r) + "b3", borderColor: css("--surface"), borderWidth: 1};
+    })},
+    options: {parsing: false,
+      scales: {x: {title: {display: true, text: axisTitle(fx)}}, y: {title: {display: true, text: axisTitle(fy)}}},
+      plugins: {tooltip: {callbacks: {label: ctx => `${ctx.dataset.label}, episode ${ctx.raw.episode}: ` +
+        `${fmt(ctx.raw.x, fx)} ${unitOf(fx)}, ${fmt(ctx.raw.y, fy)} ${unitOf(fy)}`}}}}});
+}
+
+// ---------------------------------------------------------------- page
+function renderChips() {
+  $("chips").replaceChildren(...runs.map(r => {
+    const d = r.data, eps = d.episodes.length;
+    const assumed = sum(d.episodes.map(e => e.m.collisions_type_assumed || 0));
+    const title = `${d.path || ""}${d.checkpoint ? `\nCheckpoint ${d.checkpoint}` : ""}\n${eps} episodes, ${d.incomplete_episodes ?? 0} incomplete skipped` +
+      `\nTTC threshold ${d.ttc_threshold_s} s` +
+      (d.rss ? `\nRSS: response ${d.rss.response_s} s, accel ${d.rss.accel_max}, brake min ${d.rss.brake_min}, lead brake max ${d.rss.brake_max} m/s²` : "") + (assumed ? `\n${assumed} collision(s) with assumed type` : "");
+    return h("span", {class: "chip", title},
+      h("span", {class: "key", style: `background:${color(r)}`}),
+      r.name,
+      h("button", {"aria-label": `Remove ${r.name}`, onclick: () => {
+        runs.splice(runs.indexOf(r), 1);
+        if (state.baseline === r.name) state.baseline = runs[0]?.name ?? null;
+        render();
+      }}, "×"));
+  }));
+}
+
+function renderFilters() {
+  const values = key => [...new Set(runs.flatMap(r => r.data.episodes.map(e => e.info[key])))].sort();
+  const segment = (key, label) => {
+    const opts = ["all", ...values(key)];
+    if (!opts.includes(state.filters[key])) state.filters[key] = "all";
+    return h("span", {}, h("label", {}, `${label} `), h("span", {class: "seg"}, opts.map(v =>
+      h("button", {"aria-pressed": String(state.filters[key] === v),
+                   onclick: () => { state.filters[key] = v; render(); }},
+        v === "all" ? "All" : SOURCE_LABELS[v] || v))));
+  };
+  const select = (key, label) => {
+    const opts = ["all", ...values(key)];
+    if (!opts.includes(state.filters[key])) state.filters[key] = "all";
+    const el = h("select", {onchange: e => { state.filters[key] = e.target.value; render(); }},
+      opts.map(v => h("option", {value: v, selected: v === state.filters[key]}, v === "all" ? "All" : v)));
+    return h("label", {}, `${label} `, el);
+  };
+  const windowInput = h("input", {type: "number", min: 1, max: 1000, value: state.window, style: "width:5em",
+    onchange: e => { state.window = Math.max(1, +e.target.value || 1); render(); }});
+  const baseline = h("select", {onchange: e => { state.baseline = e.target.value; render(); }},
+    runs.map(r => h("option", {value: r.name, selected: r.name === state.baseline}, r.name)));
+  $("filters").replaceChildren(segment("source", "Driver"), select("scenario", "Scenario"),
+    select("weather", "Weather"), select("perception", "Perception"),
+    h("label", {}, "Rolling window ", windowInput, " episodes"), h("label", {}, "Baseline ", baseline));
+}
+
+function renderOverview() {
+  const eps = runs.map(filtered);
+  const base = runs.findIndex(r => r.name === state.baseline);
+  const head = h("tr", {}, h("th", {}, "Metric"),
+    runs.map((r, i) => h("th", {}, h("span", {class: "key", style: `background:${color(r)};margin-right:6px`}), r.name,
+      h("div", {class: "unit"}, `${eps[i].length} episodes · ${fmt(sum(eps[i].map(e => e.info.km)))} km`),
+      r.data.checkpoint ? h("div", {class: "unit"}, r.data.checkpoint) : null)));
+  const rows = [];
+  let group = null;
+  for (const f of fields.values()) {
+    if (f.breakdown) continue;
+    if (f.group !== group) { group = f.group; rows.push(h("tr", {class: "group"}, h("td", {colspan: runs.length + 1}, group))); }
+    const vals = eps.map(e => aggregate(e, f));
+    rows.push(h("tr", {class: "metric", title: f.note || "", onclick: () => pick("pickA", f.id)},
+      h("td", {}, f.label, " ", h("span", {class: "unit"}, unitOf(f))),
+      vals.map((v, i) => valueCell(v, i === base ? null : vals[base], f))));
+  }
+  $("overview").replaceChildren(h("thead", {}, head), h("tbody", {}, rows));
+  const p = runs[0]?.data.penalties || {};
+  const assumed = sum(runs.flatMap(r => filtered(r).map(e => e.m.collisions_type_assumed || 0)));
+  $("footnote").textContent = `Infraction penalties: pedestrian ×${p.pedestrian}, vehicle ×${p.vehicle}, ` +
+    `static ×${p.static}, red light ×${p.red_light}. Off-road progress is removed from route completion.` +
+    (assumed ? ` ${assumed} collision(s) predate collision-type logging and are counted as static.` : "");
+}
+
+// Table cell with the change from the baseline value (none for the baseline itself).
+function valueCell(v, baseValue, f, title) {
+  const cell = h("td", {title}, fmt(v, f));
+  if (v !== null && baseValue !== null && baseValue !== undefined) {
+    const d = v - baseValue;
+    const good = f.better === "higher" ? d > 0 : f.better === "lower" ? d < 0 : null;
+    const tiny = Math.abs(d) < 1e-9;
+    cell.append(h("span", {class: `delta ${tiny || good === null ? "flat" : good ? "up" : "down"}`},
+      `${tiny ? "=" : d > 0 ? "▲ +" : "▼ "}${tiny ? "" : fmt(d, f)}`));
+  }
+  return cell;
+}
+
+function renderScenarios() {
+  fillPicker("pickScenario");
+  const f = fields.get(state.pickScenario);
+  const eps = runs.map(filtered);
+  const base = runs.findIndex(r => r.name === state.baseline);
+  const scenarios = [...new Set(eps.flat().map(e => e.info.scenario))];
+  const head = h("tr", {}, h("th", {}, "Scenario"),
+    runs.map(r => h("th", {}, h("span", {class: "key", style: `background:${color(r)};margin-right:6px`}), r.name)));
+  const row = (label, pickEps) => {
+    const groups = eps.map(pickEps);
+    const vals = groups.map(g => aggregate(g, f));
+    const endings = g => g.map(e => Object.keys(e.b?.episode_end || {}).join(", ")).join("; ");
+    return h("tr", {}, h("td", {}, label),
+      vals.map((v, i) => valueCell(v, i === base ? null : vals[base], f, endings(groups[i]) || "Not run")));
+  };
+  const rows = scenarios.map(s => row(s, e => e.filter(ep => ep.info.scenario === s)));
+  rows.push(row(h("strong", {}, "All scenarios"), e => e));
+  $("scenarios").replaceChildren(h("thead", {}, head), h("tbody", {}, rows));
+}
+$("pickScenario").addEventListener("change", e => { state.pickScenario = e.target.value; renderScenarios(); });
+
+function fillPicker(sel) {
+  if (!fields.has(state[sel])) state[sel] = fields.keys().next().value;
+  const groups = new Map();
+  for (const f of fields.values()) (groups.get(f.group) || groups.set(f.group, []).get(f.group)).push(f);
+  $(sel).replaceChildren(...[...groups].map(([g, fs]) => h("optgroup", {label: g},
+    fs.map(f => h("option", {value: f.id, selected: f.id === state[sel]}, f.cat ?? f.label)))));
+}
+
+function pick(selectId, id) {
+  state[selectId] = id;
+  renderExplorer();
+  if (selectId === "pickA") $("explorer").scrollIntoView({behavior: "smooth"});
+}
+
+function card(title, canvasId, extra) {
+  return h("div", {class: "card"}, h("h3", {}, title), extra || null, h("div", {class: "plot"}, h("canvas", {id: canvasId})));
+}
+
+function renderSections() {
+  const named = new Set(SECTIONS.flatMap(s => s.breakdowns || []));
+  const keys = [...new Set(runs.flatMap(r => (r.data.breakdowns || []).map(b => b.key)))];
+  const extra = keys.filter(k => !named.has(k)).map(k => ({title: fields.get(breakdownFields(k)[0]?.id)?.group || k,
+                                                       breakdowns: [k]}));
+  const draws = [];
+  const nodes = [...SECTIONS, ...extra].map((s, si) => {
+    const grid = h("div", {class: "grid"});
+    for (const key of s.trends || []) {
+      const f = fields.get(key);
+      if (!f) continue;
+      const id = `s${si}-trend-${key}`;
+      grid.append(card(trendTitle(f), id));
+      draws.push(() => drawTrend(id, f));
+    }
+    for (const key of s.histograms || []) {
+      const f = fields.get(key);
+      if (!f) continue;
+      const id = `s${si}-hist-${key}`;
+      grid.append(card(`${f.label} per episode, distribution`, id));
+      draws.push(() => drawHistogram(id, f));
+    }
+    const bkeys = (s.breakdowns || []).filter(k => breakdownFields(k).length);
+    if (bkeys.length) {
+      const sid = `s${si}`;
+      if (!bkeys.includes(state.picks[sid + ":view"])) state.picks[sid + ":view"] = bkeys[0];
+      const view = state.picks[sid + ":view"];
+      const switcher = bkeys.length > 1 ? h("div", {class: "seg", style: "margin-bottom:8px"}, bkeys.map(k =>
+        h("button", {"aria-pressed": String(k === view), onclick: () => { state.picks[sid + ":view"] = k; render(); }},
+          fields.get(breakdownFields(k)[0].id).group))) : null;
+      const label = fields.get(breakdownFields(view)[0].id).group;
+      grid.append(card(`${label}, ${unitOf(breakdownFields(view)[0])}`, `${sid}-bars`, switcher));
+      grid.append(h("div", {class: "card"}, h("h3", {id: `${sid}-pick-title`}), h("div", {class: "plot"}, h("canvas", {id: `${sid}-pick`}))));
+      draws.push(() => {
+        const order = drawBreakdown(`${sid}-bars`, view, id => { state.picks[sid] = id; drawPicked(); });
+        const drawPicked = () => {
+          let id = state.picks[sid];
+          if (!order.some(f => f.id === id)) id = order[0]?.id;
+          const f = fields.get(id);
+          $(`${sid}-pick-title`).textContent = f ? `${trendTitle(f)} (click a bar to change)` : "No data";
+          if (f) drawTrend(`${sid}-pick`, f); else charts[`${sid}-pick`]?.destroy();
+        };
+        drawPicked();
+      });
+    }
+    return h("section", {}, h("h2", {}, s.title), s.note ? h("p", {class: "note"}, s.note) : null, grid);
+  });
+  $("sections").replaceChildren(...nodes);
+  draws.forEach(d => d());
+}
+
+function renderExplorer() {
+  fillPicker("pickA");
+  fillPicker("pickB");
+  const a = fields.get(state.pickA), b = fields.get(state.pickB);
+  $("trendA-title").textContent = trendTitle(a);
+  $("histA-title").textContent = `${a.label} per episode, distribution`;
+  $("scatter-title").textContent = `${a.label} vs ${b.label}, one point per episode`;
+  $("trendB-title").textContent = trendTitle(b);
+  drawTrend("trendA", a); drawHistogram("histA", a); drawScatter("scatter", a, b); drawTrend("trendB", b);
+}
+$("pickA").addEventListener("change", e => pick("pickA", e.target.value));
+$("pickB").addEventListener("change", e => pick("pickB", e.target.value));
+$("swap").addEventListener("click", () => { [state.pickA, state.pickB] = [state.pickB, state.pickA]; renderExplorer(); });
+
+function render() {
+  $("app").classList.toggle("hidden", !runs.length);
+  $("drop").classList.toggle("hidden", runs.length > 0);
+  renderChips();
+  if (!runs.length) return;
+  fields = buildFields();
+  themeDefaults();
+  renderFilters();
+  renderOverview();
+  renderScenarios();
+  renderSections();
+  renderExplorer();
+}
+render();
+</script>
+</body>
+</html>
