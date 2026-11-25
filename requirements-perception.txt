@@ -7,3 +7,4 @@ Pillow>=9
 opencv-python==4.11.0.86
 ultralytics==8.4.171
 Flask>=3,<4
+rapidocr_onnxruntime==1.2.3
