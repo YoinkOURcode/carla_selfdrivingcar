@@ -1,0 +1,389 @@
+[
+ {
+  "category": "curved",
+  "split": "held_out",
+  "minimum_route_length_m": 400,
+  "maximum_route_length_m": 700,
+  "requires_traffic_light": true,
+  "background_traffic": false,
+  "actors": [],
+  "randomize_routes": false,
+  "seed": 380006,
+  "route_start": 14,
+  "route_end": 31,
+  "name": "held_out_long_mixed_7",
+  "weather": "ClearSunset",
+  "encounters": [
+   {
+    "kind": "vehicle",
+    "trigger_m": 50,
+    "release_s": 15
+   },
+   {
+    "kind": "child",
+    "trigger_m": 120
+   },
+   {
+    "kind": "adult",
+    "trigger_m": 190
+   },
+   {
+    "kind": "child",
+    "trigger_m": 260
+   },
+   {
+    "kind": "vehicle",
+    "trigger_m": 310,
+    "release_s": 15
+   }
+  ]
+ },
+ {
+  "category": "curved",
+  "split": "held_out",
+  "minimum_route_length_m": 400,
+  "maximum_route_length_m": 700,
+  "requires_traffic_light": true,
+  "background_traffic": false,
+  "actors": [],
+  "randomize_routes": false,
+  "seed": 380008,
+  "route_start": 16,
+  "route_end": 33,
+  "name": "held_out_long_mixed_8",
+  "weather": "CloudyNoon",
+  "encounters": [
+   {
+    "kind": "child",
+    "trigger_m": 60
+   },
+   {
+    "kind": "child",
+    "trigger_m": 130
+   },
+   {
+    "kind": "adult",
+    "trigger_m": 200
+   },
+   {
+    "kind": "vehicle",
+    "trigger_m": 260,
+    "release_s": 20
+   },
+   {
+    "kind": "child",
+    "trigger_m": 345
+   }
+  ]
+ },
+ {
+  "category": "curved",
+  "split": "held_out",
+  "minimum_route_length_m": 400,
+  "maximum_route_length_m": 700,
+  "requires_traffic_light": true,
+  "background_traffic": false,
+  "actors": [],
+  "randomize_routes": false,
+  "seed": 380009,
+  "route_start": 18,
+  "route_end": 35,
+  "name": "held_out_long_mixed_9",
+  "weather": "WetNoon",
+  "wetness": 60,
+  "encounters": [
+   {
+    "kind": "adult",
+    "trigger_m": 70
+   },
+   {
+    "kind": "vehicle",
+    "trigger_m": 130,
+    "release_s": 20
+   },
+   {
+    "kind": "child",
+    "trigger_m": 200
+   },
+   {
+    "kind": "adult",
+    "trigger_m": 270
+   },
+   {
+    "kind": "child",
+    "trigger_m": 340
+   }
+  ]
+ },
+ {
+  "category": "curved",
+  "split": "held_out",
+  "minimum_route_length_m": 400,
+  "maximum_route_length_m": 700,
+  "requires_traffic_light": true,
+  "background_traffic": false,
+  "actors": [],
+  "randomize_routes": false,
+  "seed": 380010,
+  "route_start": 20,
+  "route_end": 37,
+  "name": "held_out_long_mixed_10",
+  "weather": "MidRainyNoon",
+  "wetness": 75,
+  "encounters": [
+   {
+    "kind": "vehicle",
+    "trigger_m": 45,
+    "release_s": 25
+   },
+   {
+    "kind": "adult",
+    "trigger_m": 110
+   },
+   {
+    "kind": "child",
+    "trigger_m": 170
+   },
+   {
+    "kind": "vehicle",
+    "trigger_m": 240,
+    "release_s": 15
+   },
+   {
+    "kind": "adult",
+    "trigger_m": 330
+   }
+  ]
+ },
+ {
+  "category": "curved",
+  "split": "held_out",
+  "minimum_route_length_m": 400,
+  "maximum_route_length_m": 700,
+  "requires_traffic_light": true,
+  "background_traffic": false,
+  "actors": [],
+  "randomize_routes": false,
+  "seed": 380011,
+  "route_start": 22,
+  "route_end": 39,
+  "name": "held_out_long_mixed_11",
+  "weather": "CloudySunset",
+  "encounters": [
+   {
+    "kind": "child",
+    "trigger_m": 80
+   },
+   {
+    "kind": "adult",
+    "trigger_m": 140
+   },
+   {
+    "kind": "child",
+    "trigger_m": 200
+   },
+   {
+    "kind": "adult",
+    "trigger_m": 260
+   },
+   {
+    "kind": "child",
+    "trigger_m": 320
+   }
+  ]
+ },
+ {
+  "category": "curved",
+  "split": "held_out",
+  "minimum_route_length_m": 400,
+  "maximum_route_length_m": 700,
+  "requires_traffic_light": true,
+  "background_traffic": false,
+  "actors": [],
+  "randomize_routes": false,
+  "seed": 380012,
+  "route_start": 24,
+  "route_end": 41,
+  "name": "held_out_long_mixed_12",
+  "weather": "SoftRainSunset",
+  "wetness": 70,
+  "encounters": [
+   {
+    "kind": "vehicle",
+    "trigger_m": 60,
+    "release_s": 20
+   },
+   {
+    "kind": "child",
+    "trigger_m": 125
+   },
+   {
+    "kind": "adult",
+    "trigger_m": 185
+   },
+   {
+    "kind": "child",
+    "trigger_m": 250
+   },
+   {
+    "kind": "vehicle",
+    "trigger_m": 305,
+    "release_s": 20
+   }
+  ]
+ },
+ {
+  "category": "curved",
+  "split": "held_out",
+  "minimum_route_length_m": 400,
+  "maximum_route_length_m": 700,
+  "requires_traffic_light": true,
+  "background_traffic": false,
+  "actors": [],
+  "randomize_routes": false,
+  "seed": 380013,
+  "route_start": 26,
+  "route_end": 43,
+  "name": "held_out_long_mixed_13",
+  "weather": "WetCloudyNoon",
+  "wetness": 50,
+  "fog_density": 25,
+  "fog_distance": 20,
+  "encounters": [
+   {
+    "kind": "adult",
+    "trigger_m": 55
+   },
+   {
+    "kind": "child",
+    "trigger_m": 115
+   },
+   {
+    "kind": "vehicle",
+    "trigger_m": 180,
+    "release_s": 25
+   },
+   {
+    "kind": "adult",
+    "trigger_m": 250
+   },
+   {
+    "kind": "child",
+    "trigger_m": 350
+   }
+  ]
+ },
+ {
+  "category": "curved",
+  "split": "held_out",
+  "minimum_route_length_m": 400,
+  "maximum_route_length_m": 700,
+  "requires_traffic_light": true,
+  "background_traffic": false,
+  "actors": [],
+  "randomize_routes": false,
+  "seed": 380014,
+  "route_start": 28,
+  "route_end": 45,
+  "name": "held_out_long_mixed_14",
+  "weather": "ClearNight",
+  "sun_altitude_angle": -30,
+  "encounters": [
+   {
+    "kind": "vehicle",
+    "trigger_m": 55,
+    "release_s": 20
+   },
+   {
+    "kind": "adult",
+    "trigger_m": 120
+   },
+   {
+    "kind": "child",
+    "trigger_m": 190
+   },
+   {
+    "kind": "adult",
+    "trigger_m": 280
+   }
+  ]
+ },
+ {
+  "category": "curved",
+  "split": "held_out",
+  "minimum_route_length_m": 400,
+  "maximum_route_length_m": 700,
+  "requires_traffic_light": true,
+  "background_traffic": false,
+  "actors": [],
+  "randomize_routes": false,
+  "seed": 380015,
+  "route_start": 30,
+  "route_end": 47,
+  "name": "held_out_long_mixed_15",
+  "weather": "WetNight",
+  "wetness": 60,
+  "sun_altitude_angle": -25,
+  "encounters": [
+   {
+    "kind": "child",
+    "trigger_m": 90
+   },
+   {
+    "kind": "vehicle",
+    "trigger_m": 150,
+    "release_s": 20
+   },
+   {
+    "kind": "adult",
+    "trigger_m": 220
+   },
+   {
+    "kind": "child",
+    "trigger_m": 300
+   }
+  ]
+ },
+ {
+  "category": "curved",
+  "split": "held_out",
+  "minimum_route_length_m": 400,
+  "maximum_route_length_m": 700,
+  "requires_traffic_light": true,
+  "background_traffic": false,
+  "actors": [],
+  "randomize_routes": false,
+  "seed": 380016,
+  "route_start": 32,
+  "route_end": 49,
+  "name": "held_out_long_mixed_16",
+  "weather": "MidRainyNight",
+  "wetness": 80,
+  "sun_altitude_angle": -25,
+  "fog_density": 20,
+  "fog_distance": 25,
+  "encounters": [
+   {
+    "kind": "adult",
+    "trigger_m": 65
+   },
+   {
+    "kind": "child",
+    "trigger_m": 130
+   },
+   {
+    "kind": "vehicle",
+    "trigger_m": 200,
+    "release_s": 15
+   },
+   {
+    "kind": "child",
+    "trigger_m": 270
+   },
+   {
+    "kind": "adult",
+    "trigger_m": 340
+   }
+  ]
+ }
+]

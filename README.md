@@ -160,7 +160,10 @@ The final model was re-evaluated after patch `47c77c22d`, which removed a
 ground-truth lane override that had kept the car on the road. The checkpoint is
 unchanged. The suite is 16 Town02 scenarios, each run twice: scenarios 1 to 6
 are the original suite (`deployment/town02_scenarios.json`) and 7 to 16 were
-added for this evaluation. Town02 was never used in training.
+added for this evaluation (`deployment/town02_new_scenarios_7_to_16.json`).
+Town02 was never used in training. Per-scenario results are in
+`deployment/town02_evaluation_summary.md`, and the dashboard summaries of both
+runs are in `deployment/dashboard_summaries/`.
 
 | Measure | Value |
 | --- | --- |
