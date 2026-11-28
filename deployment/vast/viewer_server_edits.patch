@@ -1,0 +1,78 @@
+diff --git a/dreamerv3_attention/viewer.html b/dreamerv3_attention/viewer.html
+index 58b494d16..8b531831c 100644
+--- a/dreamerv3_attention/viewer.html
++++ b/dreamerv3_attention/viewer.html
+@@ -156,11 +156,15 @@
+       $('rewardTotalValue').textContent=number(s.episode_return,3);
+       footer.hidden=false;
+     }
++    let frameLoading=false, framePending=null;
+     function draw(s) {
++      if(s.image&&frameLoading){framePending=s;return;}
+       const sequence=++drawSequence, ctx=$('camera').getContext('2d');
+       if (!s.image) {ctx.clearRect(0,0,1280,720);$('empty').style.display='grid';$('empty').textContent=view==='training'?(s.message||'Waiting for a live camera frame.'):'Camera unavailable for this frame.';return;}
+-      const image=new Image(); image.onload=()=>{
+-        if(sequence!==drawSequence)return;
++      const image=new Image(); frameLoading=true;
++      const done=()=>{frameLoading=false;if(framePending){const next=framePending;framePending=null;draw(next);}};
++      image.onerror=done; image.onload=()=>{
++        if(sequence!==drawSequence){done();return;}
+         $('empty').style.display='none';ctx.drawImage(image,0,0,1280,720);
+         for(const o of s.objects||[]) {
+           const x=o.x*1280,y=o.y*720,show=$('attention').checked && s.attention_enabled;
+@@ -169,6 +173,7 @@
+           ctx.font='19px system-ui';const width=ctx.measureText(text).width+14,tx=Math.max(0,Math.min(1280-width,x+18)),ty=Math.max(28,y-14);
+           ctx.fillStyle='rgba(5,12,20,.88)';ctx.fillRect(tx,ty-23,width,30);ctx.fillStyle='#c8ffe9';ctx.fillText(text,tx+7,ty);
+         }
++        done();
+       };image.src=s.image;
+     }
+     function render(s) {
+@@ -194,7 +199,7 @@
+       const budgetReady=Number.isFinite(s.budget_seconds)&&s.budget_seconds>0&&s.budget_seconds<=86400;
+       $('drive').disabled=training||active||!budgetReady||!s.checkpoint_available||pending;
+       $('stop').disabled=training||!active;$('start').disabled=training||active;$('destination').disabled=training||active;
+-      if(!training&&!initialized){$('start').value=s.route_start;$('destination').value=s.route_end;initialized=true;}
++      if(!training&&!initialized&&Number.isInteger(s.route_start)&&Number.isInteger(s.route_end)){$('start').value=s.route_start;$('destination').value=s.route_end;initialized=true;}
+       if(!training&&!budgetReady)$('message').textContent='Driving needs --budget-seconds SECONDS in (0, 86400] when launching the viewer.';
+       else if(!training&&!s.checkpoint_available)$('message').textContent='Launch with --checkpoint PATH to drive using a trained Dreamer model.';
+       $('speed').textContent=number(s.speed_kmh);$('limit').textContent=number(s.speed_limit_kmh,0);
+@@ -226,7 +231,15 @@
+     function selectMode(mode){view=mode;lastFrame=null;++drawSequence;$('trainingPanel').hidden=mode!=='training';$('drivePanel').hidden=mode==='training';$('title').textContent=mode==='training'?'Live run':'Live drive';$('trainingMode').setAttribute('aria-pressed',String(mode==='training'));$('driveMode').setAttribute('aria-pressed',String(mode==='drive'));render({status:'connecting',message:'Connecting to the feed…'});poll();}
+     $('trainingMode').onclick=()=>selectMode('training');$('driveMode').onclick=()=>selectMode('drive');
+     async function poll(){const requested=view;try{const response=await fetch(requested==='training'?'/api/training':'/api/state',{cache:'no-store'});if(!response.ok)throw new Error('Viewer unavailable');const state=await response.json();if(view===requested)render(state);}catch(e){if(view!==requested)return;$('status').textContent='Disconnected';$('drive').disabled=true;$('stop').disabled=true;$('freshness').textContent='Connection lost · Displayed frame is no longer live.';$('message').textContent='Viewer connection lost. Check the server terminal.';}}
+-    async function loop(){const started=performance.now();await poll();setTimeout(loop,Math.max(0,100-(performance.now()-started)));}loop();
++    async function loop(){const started=performance.now();await poll();setTimeout(loop,Math.max(0,400-(performance.now()-started)));}loop();
++  </script>
++  <section style="margin-top:32px">
++    <h2 style="margin:0 0 4px">Evaluation results</h2>
++    <p style="margin:0 0 12px;opacity:.75">Town02, patched code, 16 scenarios, two runs each.</p>
++    <iframe id="dashFrame" src="/dashboard/" title="Evaluation dashboard" style="width:100%;height:1600px;border:1px solid rgba(128,128,128,.35);border-radius:8px;background:#fff"></iframe>
++  </section>
++  <script>
++    (()=>{const f=document.getElementById('dashFrame');const fit=()=>{try{const d=f.contentDocument;if(d&&d.documentElement)f.style.height=Math.max(600,d.documentElement.scrollHeight+20)+'px';}catch(e){}};f.addEventListener('load',()=>{fit();try{new ResizeObserver(fit).observe(f.contentDocument.body);}catch(e){}});})();
+   </script>
+ </body>
+ </html>
+diff --git a/dreamerv3_attention/viewer.py b/dreamerv3_attention/viewer.py
+index 16d425dca..919dd2968 100644
+--- a/dreamerv3_attention/viewer.py
++++ b/dreamerv3_attention/viewer.py
+@@ -218,7 +218,7 @@ def snapshot(env, observation, attention, distance, info, mode):
+     objects = []
+     if bundle.rgb is not None and bundle.valid.get("rgb", False):
+         buffer = io.BytesIO()
+-        Image.fromarray(bundle.rgb).save(buffer, format="JPEG", quality=80)
++        Image.fromarray(bundle.rgb).resize((640, 360)).save(buffer, format="JPEG", quality=60)  # smaller frame for slow links
+         image = buffer.getvalue()
+         calibration = bundle.calibration["sensors"]["rgb"]
+         camera_matrix = (np.asarray(env.rig.sensors[0].get_transform().get_inverse_matrix()) @
+@@ -317,7 +317,7 @@ class Viewer:
+         from .evaluation import collection_scenarios
+         from .training import Trainer, register_run, seed_all, workload_lock
+ 
+-        cfg = replace(self.cfg, device="cpu", route_start=start, route_end=end,
++        cfg = replace(self.cfg, route_start=start, route_end=end,
+                       max_episode_steps=max(self.cfg.max_episode_steps, math.ceil(self.args.budget_seconds / self.cfg.dt)))
+         output = None
+         started = time.monotonic()
