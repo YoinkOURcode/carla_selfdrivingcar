@@ -1,0 +1,35 @@
+{
+	auto_https off
+	admin off
+}
+:8081 {
+	encode gzip
+	log {
+		output file /home/carla/demo/access.log
+	}
+	basic_auth {
+		team PASSWORD_HASH
+	}
+	@xorigin {
+		header Origin *
+		not header Origin http://PUBLIC_IP:VIEWER_PORT
+	}
+	respond @xorigin 403
+	handle_path /dashboard/* {
+		root * /home/carla/demo/dash
+		file_server
+	}
+	reverse_proxy 127.0.0.1:8080 {
+		header_up Host localhost:8080
+		header_up Origin http://localhost:8080
+	}
+}
+:8082 {
+	encode gzip
+	basic_auth {
+		team PASSWORD_HASH
+	}
+	reverse_proxy 127.0.0.1:8773 {
+		header_up Host 127.0.0.1:8773
+	}
+}
